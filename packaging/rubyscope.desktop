@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=rubyscope
+GenericName=Ruby code browser
+Comment=Read Ruby code: Ctrl+click to go to a definition
+Exec=rubyscope %F
+Icon=text-x-ruby
+Terminal=false
+Categories=Development;
+MimeType=inode/directory;text/x-ruby;
+StartupWMClass=rubyscope

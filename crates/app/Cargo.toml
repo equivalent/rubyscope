@@ -1,0 +1,26 @@
+[package]
+name = "rubyscope"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rubyscope"
+path = "src/main.rs"
+
+[dependencies]
+rubyscope-index.workspace = true
+anyhow.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "wgpu", "wayland", "x11"] }
+nucleo-matcher = "0.3"
+notify = "8"
+rfd = "0.17"
+rayon.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
+toml = "0.9"
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["eframe", "wgpu", "snapshot"] }

@@ -1,0 +1,10 @@
+/target
+# Real click points and probe output from private projects stay outside the repo.
+/tests/golden/
+probe.json
+*.probe.json
+/shots/
+**/tests/snapshots/
+*.bin
+.env*
+*.log

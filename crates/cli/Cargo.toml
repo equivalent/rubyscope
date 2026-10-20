@@ -1,0 +1,15 @@
+[package]
+name = "rubyscope-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rubyscope-cli"
+path = "src/main.rs"
+
+[dependencies]
+rubyscope-index.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true

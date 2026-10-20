@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Builds rubyscope and installs it for this user:
+#   ~/.local/bin/rubyscope and ~/.local/bin/rubyscope-cli
+#   ~/.local/share/applications/rubyscope.desktop (the app launcher entry)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+cargo build --release -p rubyscope -p rubyscope-cli
+install -Dm755 target/release/rubyscope "$HOME/.local/bin/rubyscope"
+install -Dm755 target/release/rubyscope-cli "$HOME/.local/bin/rubyscope-cli"
+install -Dm644 packaging/rubyscope.desktop "$HOME/.local/share/applications/rubyscope.desktop"
+command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" || true
+echo "Installed rubyscope. Run: rubyscope <project folder>"
