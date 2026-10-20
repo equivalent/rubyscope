@@ -135,6 +135,7 @@ rubyscope                                            # see below
 | Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. |
 | Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. |
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
+| Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
 | Code view | Drag to select text. Double-click selects a word. Ctrl+C copies the selection. |
 | Results panel | Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers. Click a row or a name to go to it. |
 
@@ -144,6 +145,7 @@ rubyscope                                            # see below
 |---|---|
 | Ctrl+click | Go to the definition (a list when there are several) |
 | Ctrl+click on the name of a controller action | Go to its view (template or Phlex view) |
+| Click the link above the code of a view | Go to its controller action or mailer method |
 | Rest the pointer on a name | Popup with signature, docs, location, type |
 | Right-click | Menu: go to view (in a controller action) or go to controller action (in a view), go to definition, all definitions, find usages, type hierarchy, copy name, copy path:line, open in editor, open on GitHub |
 | Mouse back and forward buttons, the ← → buttons | Back and forward |
@@ -276,6 +278,7 @@ The names of the commands that have a default key:
   ↔ `app/views/invoices/edit.*`, variant folders such as
   `app/views/invoices/native/edit.rb`, and `Views::Invoices::Edit`.
   Mailer methods and their templates the same way.
+  A view file shows a link to its action above the code.
 - Route helpers (`admin_invoice_path` → the route line), and in routes
   files, `resources :x` → the controller, `to: "a#b"` → the action.
 - `t("a.b")` and lazy `t(".x")` (controllers, Phlex, templates) → the
