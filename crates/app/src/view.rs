@@ -269,7 +269,7 @@ pub fn code_view(
         (true, None) => BLAME_WIDTH,
         (true, Some(blame)) => {
             let name = blame.commits.iter().map(|c| c.last_name().chars().count()).max().unwrap_or(0);
-            // `16/07/2025 Henriksson`, and space on both sides.
+            // `16/07/2025 Novak`, and space on both sides.
             (11 + name.min(BLAME_NAME_CHARS)) as f32 * char_w * BLAME_FONT + 22.0
         }
     };

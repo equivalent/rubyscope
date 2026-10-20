@@ -21,7 +21,7 @@ impl Commit {
         self.sha.bytes().all(|b| b == b'0')
     }
 
-    /// `Henriksson` for `Mikael Henriksson`.
+    /// `Novak` for `Ana Novak`.
     pub fn last_name(&self) -> &str {
         self.author.split_whitespace().last().unwrap_or("")
     }
@@ -213,7 +213,7 @@ filename a.rb
     fn short_dates() {
         let c = |time: i64, tz: i32| Commit {
             sha: String::new(),
-            author: "Mikael Henriksson".into(),
+            author: "Ana Novak".into(),
             time,
             tz,
             summary: String::new(),
@@ -227,7 +227,7 @@ filename a.rb
         // 23:30 in UTC is the next day for an author in UTC+2.
         assert_eq!(c(1_752_708_600, 7200).short_date(t + 86_400 * 3), "17/07/2025");
         assert_eq!(c(951_782_400, 0).short_date(t), "29/02/2000");
-        assert_eq!(c(t, 0).last_name(), "Henriksson");
+        assert_eq!(c(t, 0).last_name(), "Novak");
         assert_eq!(parse_tz("-0530"), -(5 * 3600 + 30 * 60));
     }
 
