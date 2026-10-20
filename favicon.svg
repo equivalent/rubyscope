@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="tile" x1="96" y1="32" x2="416" y2="480" gradientUnits="userSpaceOnUse"><stop stop-color="#20232d"/><stop offset="1" stop-color="#14161d"/></linearGradient>
+    <linearGradient id="ruby" x1="176" y1="136" x2="320" y2="400" gradientUnits="userSpaceOnUse"><stop stop-color="#ff5a73"/><stop offset="1" stop-color="#e8254a"/></linearGradient>
+    <clipPath id="lens"><circle cx="256" cy="246" r="100"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <path d="M148 112H364L436 216L256 416L76 216Z" fill="#c2183d"/>
+  <path d="M148 112L192 216H76Z" fill="#ff5a73"/>
+  <path d="M148 112H364L320 216H192Z" fill="url(#ruby)"/>
+  <path d="M364 112L436 216H320Z" fill="#c2183d"/>
+  <path d="M76 216H192L256 416Z" fill="#e8254a"/>
+  <path d="M192 216H320L256 416Z" fill="url(#ruby)"/>
+  <path d="M320 216H436L256 416Z" fill="#8f0f2d"/>
+  <g clip-path="url(#lens)">
+    <g transform="translate(-71.68 -25.48) scale(1.28)">
+  <path d="M148 112H364L436 216L256 416L76 216Z" fill="#c2183d"/>
+  <path d="M148 112L192 216H76Z" fill="#ff5a73"/>
+  <path d="M148 112H364L320 216H192Z" fill="#ff526e"/>
+  <path d="M148 112L184 144L210 186L192 216Z" fill="#ff8196"/>
+  <path d="M148 112H364L328 144H184Z" fill="#ff93a5"/>
+  <path d="M364 112L320 216L302 186L328 144Z" fill="#ce2049"/>
+  <path d="M184 144H328L302 186H210Z" fill="#ffb0bd"/>
+  <path d="M210 186H302L320 216H192Z" fill="#ff6882"/>
+  <path d="M364 112L436 216H320Z" fill="#c2183d"/>
+  <path d="M76 216H192L256 416Z" fill="#e8254a"/>
+  <path d="M192 216H320L256 416Z" fill="url(#ruby)"/>
+  <path d="M320 216H436L256 416Z" fill="#8f0f2d"/>
+    </g>
+  </g>
+  <path d="M335 325L390 380" stroke="#fff2e9" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="256" cy="246" r="100" stroke="#fff2e9" stroke-width="22"/>
+</svg>
