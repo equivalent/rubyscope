@@ -1,5 +1,7 @@
 //! Turns a position in a file into the definitions it points to.
 
+use std::collections::HashSet;
+
 use crate::index::{BLOCK_OWNER, ConstKind, FileId, Index, Loc, MethodId};
 pub use crate::infer::Confidence;
 use crate::infer::{Ctx, Ty};
@@ -29,6 +31,11 @@ pub struct Resolution {
 
 /// The most targets a name-only list returns.
 const NAME_ONLY_LIMIT: usize = 50;
+
+/// `Button`, not `button`: a method with this name can be a Phlex kit call.
+fn is_const_name(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+}
 
 /// Rails URL helper suffixes.
 fn route_helper_base(name: &str) -> Option<&str> {
@@ -165,6 +172,7 @@ impl Index {
                     let class = self.alias_target(&class).unwrap_or(class);
                     receiver_type = Some((format!("{class} (class)"), Confidence::Exact));
                     self.class_method_targets(&class, name, Confidence::Exact)
+                        .or_else(|| self.kit_member_targets(&class, name))
                 }
                 None => None,
             },
@@ -180,7 +188,10 @@ impl Index {
                 }
             }
         };
-        let targets = found.filter(|t| !t.is_empty()).unwrap_or_else(|| self.methods_named(name));
+        let targets = found.filter(|t| !t.is_empty()).unwrap_or_else(|| {
+            let named = self.methods_named(name);
+            if named.is_empty() { self.kit_consts_named(name) } else { named }
+        });
         (targets, receiver_type)
     }
 
@@ -214,17 +225,71 @@ impl Index {
         self.methods_for_conf(&ty.class, false, name, conf)
     }
 
-    /// `Button(...)` inside a Phlex kit, or `Components::Button(...)`:
-    /// a method call named like a constant.
+    /// `Button(...)` inside a Phlex kit, in a class that includes the kit,
+    /// or in a module (such as a concern) that such a class includes: a
+    /// method call named like a constant.
     fn kit_targets(&self, owner: &str, chain: &[String], name: &str) -> Option<Vec<Target>> {
-        if !name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if !is_const_name(name) {
             return None;
         }
+        let in_ancestors =
+            |class: &str| self.ancestors(class).iter().map(|a| format!("{a}::{name}")).find(|n| self.const_exists(n));
         let path = ConstPath { absolute: false, segments: vec![name.to_string()] };
-        let found = self
-            .lookup_const(&path, chain)
-            .or_else(|| self.ancestors(owner).iter().map(|a| format!("{a}::{name}")).find(|n| self.const_exists(n)))?;
+        if let Some(found) = self.lookup_const(&path, chain).or_else(|| in_ancestors(owner)) {
+            return Some(self.const_targets(&found, Confidence::Exact));
+        }
+        // A module gets the kit from the classes that include it.
+        let mut seen = HashSet::from([owner.to_string()]);
+        let mut todo = vec![owner.to_string()];
+        while let Some(module) = todo.pop() {
+            for includer in self.includers.get(&module).into_iter().flatten() {
+                let includes = self
+                    .namespaces
+                    .get(includer)
+                    .is_some_and(|ns| ns.includes.contains(&module) || ns.prepends.contains(&module));
+                if !includes || !seen.insert(includer.clone()) {
+                    continue;
+                }
+                if let Some(found) = in_ancestors(includer) {
+                    return Some(self.const_targets(&found, Confidence::Inferred));
+                }
+                todo.push(includer.clone());
+            }
+        }
+        None
+    }
+
+    /// `Components::Button(...)`: the kit's method for its constant
+    /// `Components::Button`.
+    fn kit_member_targets(&self, kit: &str, name: &str) -> Option<Vec<Target>> {
+        if !is_const_name(name) {
+            return None;
+        }
+        let path = ConstPath { absolute: true, segments: vec![kit.to_string(), name.to_string()] };
+        let found = self.lookup_const(&path, &[])?;
         Some(self.const_targets(&found, Confidence::Exact))
+    }
+
+    /// `f.Submit(...)` on a receiver of unknown type: the components of
+    /// every Phlex kit with that name.
+    fn kit_consts_named(&self, name: &str) -> Vec<Target> {
+        if !is_const_name(name) {
+            return Vec::new();
+        }
+        let mut kits: Vec<&String> = self
+            .includers
+            .get("Phlex::Kit")
+            .into_iter()
+            .flatten()
+            .filter(|k| self.namespaces.get(*k).is_some_and(|ns| ns.extends.iter().any(|e| e == "Phlex::Kit")))
+            .collect();
+        kits.sort();
+        kits.into_iter()
+            .map(|k| format!("{k}::{name}"))
+            .filter(|n| self.consts.contains_key(n))
+            .flat_map(|n| self.const_targets(&n, Confidence::NameOnly))
+            .take(NAME_ONLY_LIMIT)
+            .collect()
     }
 
     fn route_targets(&self, name: &str) -> Option<Vec<Target>> {
@@ -524,7 +589,7 @@ impl Index {
     /// Every definition of a constant. For a class that is opened in many
     /// files, the file that Zeitwerk would load comes first.
     pub fn const_targets(&self, name: &str, confidence: Confidence) -> Vec<Target> {
-        let Some(defs) = self.consts.get(name) else { return Vec::new() };
+        let Some(defs) = self.consts.get(name) else { return self.namespace_parts(name, confidence) };
         let expected = format!("{}.rb", inflect::underscore(name.rsplit("::").next().unwrap_or(name)));
         let mut targets: Vec<(u8, Target)> = defs
             .iter()
@@ -546,6 +611,22 @@ impl Index {
             .collect();
         targets.sort_by_key(|(rank, t)| (*rank, t.loc.file, t.loc.span.start));
         targets.into_iter().map(|(_, t)| t).collect()
+    }
+
+    /// A namespace that no file defines, such as the module Zeitwerk makes
+    /// for a folder: the main place of each constant in it.
+    fn namespace_parts(&self, name: &str, confidence: Confidence) -> Vec<Target> {
+        if !self.implicit_namespaces.contains(name) {
+            return Vec::new();
+        }
+        let prefix = format!("{name}::");
+        let mut names: Vec<&String> = self.consts.keys().filter(|k| k.starts_with(&prefix)).collect();
+        names.sort();
+        names
+            .into_iter()
+            .filter_map(|n| self.const_targets(n, confidence).into_iter().next())
+            .take(NAME_ONLY_LIMIT)
+            .collect()
     }
 
     /// Constants whose last segment is `seg`, when the lookup failed.

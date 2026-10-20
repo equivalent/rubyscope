@@ -29,7 +29,7 @@ the end tells what is done.
 
 | Tool | What it gives |
 |---|---|
-| `ruby` | Gems and the standard library in the index. rubyscope runs `ruby` in the project folder, so mise, rbenv or the `ruby` on `PATH` selects the version. |
+| `ruby` | Gems and the standard library in the index. rubyscope asks mise or rbenv (`mise which ruby`, `rbenv which ruby`) for the Ruby of the project folder, else it runs the `ruby` on `PATH`. |
 | Installed gems (`bundle install`) | Clicks that go into gem source. Only gems that are installed are indexed. |
 | `git` | Git blame and "Open on GitHub" |
 | `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit |
@@ -68,7 +68,7 @@ It builds the release binaries and installs:
 
 An app started from Finder or the Dock gets only the system `PATH`. So on
 macOS, rubyscope reads the `PATH` from your login shell when it starts.
-Then `ruby` is the Ruby of rbenv, mise or Homebrew, the same as in the
+Then `ruby`, `mise` and `rbenv` are found the same way as in the
 terminal.
 
 To build without installing:
@@ -259,7 +259,8 @@ The names of the commands that have a default key:
 ## What a click understands
 
 - Ruby's constant lookup (lexical scopes, ancestors, top level), compact
-  names (`class A::B`), constant aliases, Zeitwerk folder namespaces.
+  names (`class A::B`), constant aliases, Zeitwerk folder namespaces
+  (a click on one lists the classes in it).
 - Method lookup in Ruby's order: prepends, the class, includes, the
   superclass. Class methods, `class << self`, `extend`, `module_function`,
   concerns (`class_methods do`, `included do`), `class_eval`,
@@ -273,7 +274,8 @@ The names of the commands that have a default key:
   block parameters, instance variables, return values, YARD `@return`,
   FactoryBot `create(:x)`, and as a last guess the variable's name. The
   hover shows how sure each answer is: exact, inferred, guess, name only.
-- Phlex kit calls (`Button(...)` → `UI::Button`).
+- Phlex kit calls: `Button(...)` and `UI::Button(...)` → `UI::Button`,
+  also in a module (such as a concern) that a class with the kit includes.
 - Controller actions and their views, both ways: `InvoicesController#edit`
   ↔ `app/views/invoices/edit.*`, variant folders such as
   `app/views/invoices/native/edit.rb`, and `Views::Invoices::Edit`.
@@ -293,8 +295,8 @@ The names of the commands that have a default key:
 ## How it works
 
 1. **Find files.** rubyscope lists the project files and respects
-   `.gitignore`. It reads `Gemfile.lock` and asks `ruby` where the gems
-   and the standard library are. From each installed gem it reads `lib/`
+   `.gitignore`. It reads `Gemfile.lock` and asks the project's Ruby where
+   the gems and the standard library are. From each installed gem it reads `lib/`
    and `app/`.
 2. **Parse.** It parses every Ruby file with Prism, on all CPU cores. From
    each file it takes the classes, modules, methods, constants and
