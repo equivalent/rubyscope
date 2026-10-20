@@ -93,6 +93,8 @@ pub struct App {
     welcome_path: String,
     /// True while the folder dialog is open.
     picking_folder: bool,
+    /// Where the folder from the dialog opens: a new window, or this one.
+    picked_to_new_window: bool,
     toast: Option<(String, f64)>,
     title: String,
     started: Instant,
@@ -217,6 +219,7 @@ impl App {
             last_change: None,
             welcome_path: String::new(),
             picking_folder: false,
+            picked_to_new_window: false,
             toast: None,
             title: String::new(),
             started: Instant::now(),
@@ -254,6 +257,48 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Closes the project and goes back to the project list. The open tabs
+    /// are saved, so the project opens with them again.
+    pub fn close_project(&mut self) {
+        self.save_session();
+        self.worker.restart();
+        self.root = None;
+        self.index = None;
+        self.index_status.clear();
+        self.tree = FileTree::default();
+        self.all_files = Arc::new(Vec::new());
+        self.tabs.clear();
+        self.active = 0;
+        self.history.clear();
+        self.history_pos = 0;
+        self.bottom = None;
+        self.picker = None;
+        self.file_items = None;
+        self.symbol_items = None;
+        self.choose = None;
+        self.hover = None;
+        self.context_menu = None;
+        self.pending_changes.clear();
+        self.last_change = None;
+        self.picking_folder = false;
+    }
+
+    /// Opens another project in this window.
+    fn switch_project(&mut self, root: PathBuf) {
+        let root = root.canonicalize().unwrap_or(root);
+        if self.root.as_ref() == Some(&root) {
+            return;
+        }
+        if self.root.is_some() {
+            self.close_project();
+        }
+        self.open_project(root);
+    }
+
+    fn project_name(&self) -> String {
+        self.root.as_ref().and_then(|r| r.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
     }
 
     /// Opens a project with an index that is already built (tests).
@@ -435,11 +480,12 @@ impl App {
     }
 
     /// Shows the folder dialog, once at a time.
-    fn pick_folder(&mut self) {
+    fn pick_folder(&mut self, new_window: bool) {
         if self.picking_folder {
             return;
         }
         self.picking_folder = true;
+        self.picked_to_new_window = new_window;
         let start = self
             .root
             .as_ref()
@@ -448,17 +494,21 @@ impl App {
         self.worker.pick_folder(start);
     }
 
-    /// Opens a folder: in this window from the start screen, else in a new
-    /// window (one window per project).
-    fn open_folder(&mut self, folder: PathBuf) {
-        if self.root.is_none() {
-            self.open_project(folder);
+    /// Opens a folder in a new window, or in this one. The project list has
+    /// no project, so a folder always opens there.
+    fn open_folder(&mut self, folder: PathBuf, new_window: bool) {
+        if new_window && self.root.is_some() {
+            self.open_in_new_window(&folder);
+        } else {
+            self.switch_project(folder);
+        }
+    }
+
+    fn open_in_new_window(&mut self, folder: &Path) {
+        if self.root.as_deref() == Some(folder) {
             return;
         }
-        if self.root.as_deref() == Some(folder.as_path()) {
-            return;
-        }
-        let spawned = std::env::current_exe().and_then(|exe| std::process::Command::new(exe).arg(&folder).spawn());
+        let spawned = std::env::current_exe().and_then(|exe| std::process::Command::new(exe).arg(folder).spawn());
         if let Err(e) = spawned {
             self.toast(format!("Could not open a new window: {e}"));
         }
@@ -628,7 +678,15 @@ impl App {
     pub fn run_action(&mut self, action: Action, ctx: &egui::Context) {
         let pointer = ctx.input(|i| i.pointer.latest_pos()).unwrap_or(Pos2::new(200.0, 200.0));
         match action {
-            Action::OpenFolder => self.pick_folder(),
+            // From a project, a new window: one window per project.
+            Action::OpenFolder => self.pick_folder(self.root.is_some()),
+            Action::CloseProject => {
+                if self.root.is_some() {
+                    self.close_project();
+                } else {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
             Action::GoToFile => {
                 let items = self.file_items();
                 self.picker = Some(Picker::new(PickerKind::Files, items));
@@ -771,7 +829,7 @@ impl App {
                 Msg::PickedFolder(folder) => {
                     self.picking_folder = false;
                     if let Some(folder) = folder {
-                        self.open_folder(folder);
+                        self.open_folder(folder, self.picked_to_new_window);
                     }
                 }
             }
@@ -834,10 +892,12 @@ impl App {
                         open = Some(p);
                     }
                 }
+                ui.add_space(24.0);
+                ui.label(RichText::new("Ctrl+Q to quit").color(theme.muted).small());
             });
         });
         if browse {
-            self.pick_folder();
+            self.pick_folder(false);
         }
         if let Some(p) = open {
             let expanded = match p.strip_prefix("~/") {
@@ -869,6 +929,7 @@ impl App {
                     self.go_forward();
                 }
                 ui.separator();
+                self.project_menu(ui);
                 // Breadcrumb: the classes and method around the cursor.
                 let crumbs = match (self.index.clone(), self.current_file_id(), self.current()) {
                     (Some(index), Some(file), Some(t)) => {
@@ -899,16 +960,64 @@ impl App {
                     if busy {
                         ui.spinner();
                     }
-                    let name = self
-                        .root
-                        .as_ref()
-                        .and_then(|r| r.file_name())
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    ui.label(RichText::new(format!("{name} · {}", self.index_status)).color(theme.fg_dim).small());
+                    ui.label(RichText::new(&self.index_status).color(theme.fg_dim).small());
                 });
             });
         });
+    }
+
+    /// The project name in the toolbar. Its menu goes back to the project
+    /// list, or opens another project here or in a new window.
+    fn project_menu(&mut self, ui: &mut egui::Ui) {
+        enum Choice {
+            List,
+            Here(PathBuf),
+            NewWindow(PathBuf),
+            Pick { new_window: bool },
+        }
+        let theme = self.theme.clone();
+        let current = self.root.as_ref().map(|r| r.display().to_string());
+        let close_key = self.keys.shortcut(Action::CloseProject).map(|s| s.label()).unwrap_or_default();
+        let mut choice = None;
+        let label = RichText::new(self.project_name()).color(theme.fg_bright).strong();
+        ui.menu_button(label, |ui| {
+            ui.set_min_width(360.0);
+            if ui.add(egui::Button::new("Back to the project list").shortcut_text(&close_key)).clicked() {
+                choice = Some(Choice::List);
+            }
+            let recent: Vec<String> = recent_projects().into_iter().filter(|p| Some(p) != current.as_ref()).collect();
+            if !recent.is_empty() {
+                ui.separator();
+                ui.label(RichText::new("Recent projects").color(theme.fg_dim).small());
+                for p in recent {
+                    ui.horizontal(|ui| {
+                        if ui.button("↗").on_hover_text("Open in a new window").clicked() {
+                            choice = Some(Choice::NewWindow(PathBuf::from(&p)));
+                        }
+                        if ui.button(&p).on_hover_text("Open in this window").clicked() {
+                            choice = Some(Choice::Here(PathBuf::from(&p)));
+                        }
+                    });
+                }
+            }
+            ui.separator();
+            if ui.button("Open a folder in this window…").clicked() {
+                choice = Some(Choice::Pick { new_window: false });
+            }
+            if ui.button("Open a folder in a new window…").clicked() {
+                choice = Some(Choice::Pick { new_window: true });
+            }
+        })
+        .response
+        .on_hover_text("Switch project");
+        match choice {
+            None => {}
+            Some(Choice::List) => self.close_project(),
+            Some(Choice::Here(p)) if p.is_dir() => self.switch_project(p),
+            Some(Choice::NewWindow(p)) if p.is_dir() => self.open_in_new_window(&p),
+            Some(Choice::Here(_) | Choice::NewWindow(_)) => self.toast("That folder does not exist"),
+            Some(Choice::Pick { new_window }) => self.pick_folder(new_window),
+        }
     }
 
     fn sidebar(&mut self, ui: &mut egui::Ui) {

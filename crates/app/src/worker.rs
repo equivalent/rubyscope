@@ -77,6 +77,12 @@ impl Worker {
         }
     }
 
+    /// A new worker with its own channel. Jobs of the old one still run,
+    /// but their messages go nowhere, and the old file watcher stops.
+    pub fn restart(&mut self) {
+        *self = Worker::new(self.ctx.clone());
+    }
+
     fn spawn(&self, job: impl FnOnce(&Sender<Msg>) + Send + 'static) {
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();

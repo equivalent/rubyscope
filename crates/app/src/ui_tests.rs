@@ -543,3 +543,44 @@ fn ctrl_c_copies_the_selected_text() {
         h.output().platform_output.commands.iter().any(|c| *c == eframe::egui::OutputCommand::CopyText("class".into()));
     assert!(copied, "{:?}", h.output().platform_output.commands);
 }
+
+fn asked_to_close(h: &Harness<'static, App>) -> bool {
+    h.output().viewport_output.values().any(|v| v.commands.contains(&eframe::egui::ViewportCommand::Close))
+}
+
+#[test]
+fn project_name_goes_back_to_the_project_list() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/services/billing.rb");
+    let name = root.file_name().unwrap().to_string_lossy().to_string();
+    h.get_by_label(&name).click();
+    let _ = h.run_ok();
+    shot(&mut h, "17-project-menu");
+    h.get_by_label("Back to the project list Ctrl+Q").click();
+    let _ = h.run_ok();
+    assert!(h.state().root.is_none());
+    assert!(h.state().tabs.is_empty());
+    h.get_by_label("Browse…");
+}
+
+#[test]
+fn ctrl_q_closes_the_project_then_quits() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/services/billing.rb");
+    h.key_press_modifiers(Modifiers::CTRL, Key::Q);
+    h.step();
+    assert!(h.state().root.is_none());
+    assert!(!asked_to_close(&h));
+    let _ = h.run_ok();
+    h.get_by_label("Browse…");
+
+    // The harness keeps the output of the last frame only, and it runs one
+    // frame per event, so the key press is the last event.
+    let mods = Modifiers::CTRL;
+    h.event(Event::ModifiersChanged(mods));
+    h.event(Event::Key { key: Key::Q, physical_key: None, pressed: true, repeat: false, modifiers: mods });
+    h.step();
+    assert!(asked_to_close(&h));
+}

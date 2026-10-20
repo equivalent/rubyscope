@@ -11,6 +11,7 @@ use eframe::egui::{self, Key, Modifiers};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     OpenFolder,
+    CloseProject,
     GoToFile,
     GoToSymbol,
     SearchProject,
@@ -39,6 +40,7 @@ pub enum Action {
 impl Action {
     pub const ALL: &[Action] = &[
         Action::OpenFolder,
+        Action::CloseProject,
         Action::GoToFile,
         Action::GoToSymbol,
         Action::SearchProject,
@@ -84,6 +86,7 @@ impl Action {
             Action::FindUsages => "find_usages",
             Action::GoToRelated => "go_to_view",
             Action::OpenFolder => "open_folder",
+            Action::CloseProject => "close_project",
             Action::TypeHierarchy => "type_hierarchy",
             Action::FileOutline => "file_outline",
             Action::OpenInEditor => "open_in_editor",
@@ -114,6 +117,7 @@ impl Action {
             Action::FindUsages => "Find usages of the symbol at the cursor",
             Action::GoToRelated => "Go to the view of the action, or the action of the view",
             Action::OpenFolder => "Open a project folder",
+            Action::CloseProject => "Close the project (on the project list: quit)",
             Action::TypeHierarchy => "Type hierarchy of the class at the cursor",
             Action::FileOutline => "Outline of this file",
             Action::OpenInEditor => "Open in editor (nvim) at this line",
@@ -127,6 +131,7 @@ impl Action {
     fn default_key(self) -> Option<&'static str> {
         Some(match self {
             Action::OpenFolder => "ctrl+o",
+            Action::CloseProject => "ctrl+q",
             Action::GoToFile => "ctrl+p",
             Action::GoToSymbol => "ctrl+t",
             Action::SearchProject => "ctrl+shift+f",
@@ -240,7 +245,11 @@ impl Keymap {
             for (action, s) in &self.bindings {
                 let mut hit = false;
                 input.events.retain(|e| {
-                    let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { return true };
+                    let egui::Event::Key { key, pressed: true, modifiers, repeat, .. } = e else { return true };
+                    // Holding Ctrl+Q must not close the project and then quit.
+                    if *repeat && *action == Action::CloseProject {
+                        return true;
+                    }
                     let same = *key == s.key
                         && modifiers.ctrl == s.modifiers.ctrl
                         && modifiers.shift == s.modifiers.shift
