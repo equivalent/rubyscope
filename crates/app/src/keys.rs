@@ -2,11 +2,26 @@
 //! `~/.config/rubyscope/keys.toml` can change any of them:
 //!
 //! ```toml
-//! go_to_file = "ctrl+p"
+//! go_to_file = "cmd+p"
 //! toggle_blame = "ctrl+b"
 //! ```
+//!
+//! `cmd` is Cmd on macOS and Ctrl on Linux, so one file works on both.
+//! `ctrl` is always the Ctrl key.
 
 use eframe::egui::{self, Key, Modifiers};
+
+/// On macOS the shortcuts use Cmd. Elsewhere they use Ctrl.
+pub const MAC: bool = cfg!(target_os = "macos");
+
+/// The name of the key that the shortcuts use: `Cmd` or `Ctrl`.
+pub const CMD: &str = if MAC { "Cmd" } else { "Ctrl" };
+
+/// True when the key that the shortcuts use is held: Cmd on macOS, Ctrl
+/// elsewhere. Click-to-go uses it too.
+pub fn cmd_held(m: Modifiers) -> bool {
+    if MAC { m.mac_cmd } else { m.ctrl }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
@@ -126,19 +141,20 @@ impl Action {
 
     fn default_key(self) -> Option<&'static str> {
         Some(match self {
-            Action::OpenFolder => "ctrl+o",
-            Action::GoToFile => "ctrl+p",
-            Action::GoToSymbol => "ctrl+t",
-            Action::SearchProject => "ctrl+shift+f",
-            Action::FindInFile => "ctrl+f",
-            Action::Commands => "ctrl+k",
-            Action::GoToLine => "ctrl+g",
-            Action::CloseTab => "ctrl+w",
+            Action::OpenFolder => "cmd+o",
+            Action::GoToFile => "cmd+p",
+            Action::GoToSymbol => "cmd+t",
+            Action::SearchProject => "cmd+shift+f",
+            Action::FindInFile => "cmd+f",
+            Action::Commands => "cmd+k",
+            Action::GoToLine => "cmd+g",
+            Action::CloseTab => "cmd+w",
+            // Cmd+Tab switches apps on macOS, so the tab keys stay on Ctrl.
             Action::NextTab => "ctrl+tab",
             Action::PrevTab => "ctrl+shift+tab",
             Action::ClosePopup => "escape",
-            Action::ToggleBlame => "ctrl+b",
-            Action::ToggleSidebar => "ctrl+shift+b",
+            Action::ToggleBlame => "cmd+b",
+            Action::ToggleSidebar => "cmd+shift+b",
             _ => return None,
         })
     }
@@ -151,13 +167,19 @@ pub struct Shortcut {
 }
 
 impl Shortcut {
-    /// Parses `ctrl+shift+f`, `escape`, `ctrl+tab`.
+    /// Parses `cmd+shift+f`, `escape`, `ctrl+tab`.
     pub fn parse(text: &str) -> Option<Shortcut> {
+        Shortcut::parse_on(text, MAC)
+    }
+
+    fn parse_on(text: &str, mac: bool) -> Option<Shortcut> {
         let mut modifiers = Modifiers::NONE;
         let mut key = None;
         for part in text.split('+').map(|p| p.trim().to_lowercase()) {
             match part.as_str() {
                 "ctrl" | "control" => modifiers.ctrl = true,
+                "cmd" | "command" if mac => modifiers.mac_cmd = true,
+                "cmd" | "command" => modifiers.ctrl = true,
                 "shift" => modifiers.shift = true,
                 "alt" => modifiers.alt = true,
                 "esc" | "escape" => key = Some(Key::Escape),
@@ -170,15 +192,18 @@ impl Shortcut {
                 }
             }
         }
-        modifiers.command = modifiers.ctrl;
+        modifiers.command = if mac { modifiers.mac_cmd } else { modifiers.ctrl };
         Some(Shortcut { modifiers, key: key? })
     }
 
-    /// `Ctrl+Shift+F`
+    /// `Ctrl+Shift+F`, or `Cmd+Shift+F` on macOS.
     pub fn label(&self) -> String {
         let mut parts = Vec::new();
         if self.modifiers.ctrl {
             parts.push("Ctrl".to_string());
+        }
+        if self.modifiers.mac_cmd {
+            parts.push("Cmd".to_string());
         }
         if self.modifiers.shift {
             parts.push("Shift".to_string());
@@ -243,6 +268,7 @@ impl Keymap {
                     let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { return true };
                     let same = *key == s.key
                         && modifiers.ctrl == s.modifiers.ctrl
+                        && modifiers.mac_cmd == s.modifiers.mac_cmd
                         && modifiers.shift == s.modifiers.shift
                         && modifiers.alt == s.modifiers.alt;
                     if same {
@@ -265,7 +291,7 @@ mod tests {
 
     #[test]
     fn parses_shortcuts() {
-        let s = Shortcut::parse("ctrl+shift+f").unwrap();
+        let s = Shortcut::parse_on("cmd+shift+f", false).unwrap();
         assert!(s.modifiers.ctrl && s.modifiers.shift);
         assert_eq!(s.key, Key::F);
         assert_eq!(s.label(), "Ctrl+Shift+F");
@@ -274,10 +300,19 @@ mod tests {
     }
 
     #[test]
+    fn cmd_is_the_command_key_on_macos() {
+        let s = Shortcut::parse_on("cmd+p", true).unwrap();
+        assert!(s.modifiers.mac_cmd && !s.modifiers.ctrl);
+        assert_eq!(s.label(), "Cmd+P");
+        let tab = Shortcut::parse_on("ctrl+tab", true).unwrap();
+        assert!(tab.modifiers.ctrl && !tab.modifiers.mac_cmd);
+    }
+
+    #[test]
     fn custom_keys_replace_defaults() {
         let table: toml::Table = "toggle_blame = \"ctrl+alt+b\"".parse().unwrap();
         let k = Keymap::from_table(&table);
         assert!(k.shortcut(Action::ToggleBlame).unwrap().modifiers.alt);
-        assert_eq!(k.shortcut(Action::GoToFile).unwrap().label(), "Ctrl+P");
+        assert_eq!(k.shortcut(Action::GoToFile).unwrap().label(), format!("{CMD}+P"));
     }
 }

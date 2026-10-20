@@ -161,7 +161,7 @@ impl OpenFile {
 /// What happened in the view this frame.
 #[derive(Debug, Default)]
 pub struct ViewEvents {
-    /// Ctrl+click: go to the definition at this offset.
+    /// Ctrl+click (Cmd+click on macOS): go to the definition at this offset.
     pub goto: Option<(u32, Pos2)>,
     /// Right click at this offset.
     pub context: Option<u32>,
@@ -264,7 +264,7 @@ pub fn code_view(
     let code_x = blame_w + gutter_w;
     let width = code_x + (file.max_line_chars as f32 + 4.0) * char_w;
     let time = ui.input(|i| i.time);
-    let ctrl = ui.input(|i| i.modifiers.ctrl);
+    let ctrl = ui.input(|i| crate::keys::cmd_held(i.modifiers));
 
     let mut area = egui::ScrollArea::both()
         .auto_shrink([false, false])
@@ -556,7 +556,7 @@ fn scroll_keys(ui: &egui::Ui, file: &mut OpenFile, row_h: f32, char_w: f32) -> O
         let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { continue };
         let at = to.unwrap_or(file.scroll);
         let (mut x, mut y) = (at.x, at.y);
-        let plain = !modifiers.ctrl && !modifiers.alt;
+        let plain = !modifiers.ctrl && !modifiers.alt && !modifiers.mac_cmd;
         if key != egui::Key::G || !plain || modifiers.shift {
             file.pending_g = None;
         }
