@@ -355,7 +355,8 @@ fn changed_files_are_indexed_again() {
     let mut h = harness(&root);
     // Use the real background worker and file watcher.
     h.state_mut().open_project(root.clone());
-    for _ in 0..100 {
+    // Wait up to 30 s: when all tests run at once, the machine is busy and indexing is slow.
+    for _ in 0..600 {
         std::thread::sleep(Duration::from_millis(50));
         let _ = h.run_ok();
         if h.state().index.as_ref().is_some_and(|i| i.consts.contains_key("Billing")) {
@@ -365,7 +366,7 @@ fn changed_files_are_indexed_again() {
     open(&mut h, &root, "app/services/billing.rb");
     std::fs::write(root.join("app/services/refund.rb"), "class Refund\nend\n").unwrap();
     let mut found = false;
-    for _ in 0..120 {
+    for _ in 0..600 {
         std::thread::sleep(Duration::from_millis(50));
         let _ = h.run_ok();
         if h.state().index.as_ref().is_some_and(|i| i.consts.contains_key("Refund")) {

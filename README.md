@@ -439,6 +439,18 @@ probe skips that constant and tells how many constants it skipped.
 
 ## Tests
 
+Run every check before a push, the same way a CI server would:
+
+```
+bin/ci
+```
+
+It checks formatting (`cargo fmt`), runs clippy with warnings as errors,
+runs all the tests below, checks the Ruby syntax of the probe, and looks for
+private local paths in the repo. It stops at the first step that fails.
+
+To run only some of the tests:
+
 ```
 cargo test                                           # index rules, a Rails app in memory, saved index, window tests
 RUBYSCOPE_SHOTS=/tmp/shots cargo test -p rubyscope   # also save window screenshots
@@ -466,6 +478,7 @@ RUBYSCOPE_PROJECT=~/code/shop cargo test -p rubyscope real_project_smoke -- --no
 | `probe/rails_probe.rb` | The script that gets real locations from booted Rails |
 | `plans/001-rubyscope-v1.md` | The design plan, with its status at the end |
 | `bin/install` | Builds and installs rubyscope for this user |
+| `bin/ci` | Runs every check before a push: formatting, clippy, tests, private paths |
 | `packaging/rubyscope.desktop` | The app launcher entry |
 
 Main files in `crates/index/src`:
