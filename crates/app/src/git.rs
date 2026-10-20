@@ -9,13 +9,62 @@ pub struct Commit {
     pub author: String,
     /// Seconds since the Unix epoch.
     pub time: i64,
+    /// The author's time zone, in seconds east of UTC.
+    pub tz: i32,
     pub summary: String,
+    /// 0 for the newest commit of the file, 1 for the next one, and so on.
+    pub rank: u32,
 }
 
 impl Commit {
     pub fn is_uncommitted(&self) -> bool {
         self.sha.bytes().all(|b| b == b'0')
     }
+
+    /// `Henriksson` for `Mikael Henriksson`.
+    pub fn last_name(&self) -> &str {
+        self.author.split_whitespace().last().unwrap_or("")
+    }
+
+    /// The commit date as the author saw it: `Today`, `Yesterday` or
+    /// `16/07/2025`.
+    pub fn short_date(&self, now: i64) -> String {
+        let day = |t: i64| (t + self.tz as i64).div_euclid(86_400);
+        let (then, today) = (day(self.time), day(now));
+        if then == today {
+            return "Today".into();
+        }
+        if then + 1 == today {
+            return "Yesterday".into();
+        }
+        let (y, m, d) = civil_date(then);
+        format!("{d:02}/{m:02}/{y}")
+    }
+}
+
+/// The year, month and day of a day number (days since 1970-01-01).
+fn civil_date(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    (y, m, d)
+}
+
+/// `+0200` as seconds east of UTC.
+fn parse_tz(s: &str) -> i32 {
+    let (sign, digits) = match s.as_bytes().first() {
+        Some(b'-') => (-1, &s[1..]),
+        Some(b'+') => (1, &s[1..]),
+        _ => (1, s),
+    };
+    let n: i32 = digits.parse().unwrap_or(0);
+    sign * ((n / 100) * 3600 + (n % 100) * 60)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -53,7 +102,9 @@ pub fn parse_porcelain(text: &str) -> Blame {
                     sha: first.to_string(),
                     author: String::new(),
                     time: 0,
+                    tz: 0,
                     summary: String::new(),
+                    rank: 0,
                 });
                 (blame.commits.len() - 1) as u32
             });
@@ -66,9 +117,16 @@ pub fn parse_porcelain(text: &str) -> Blame {
             commit.author = a.to_string();
         } else if let Some(t) = line.strip_prefix("author-time ") {
             commit.time = t.parse().unwrap_or(0);
+        } else if let Some(t) = line.strip_prefix("author-tz ") {
+            commit.tz = parse_tz(t);
         } else if let Some(s) = line.strip_prefix("summary ") {
             commit.summary = s.to_string();
         }
+    }
+    let mut order: Vec<usize> = (0..blame.commits.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(blame.commits[i].time));
+    for (rank, i) in order.into_iter().enumerate() {
+        blame.commits[i].rank = rank as u32;
     }
     blame
 }
@@ -137,6 +195,7 @@ filename a.rb
 2222222222222222222222222222222222222222 3 3 1
 author Tomas
 author-time 1760000000
+author-tz +0200
 summary Second
 filename a.rb
 \tline three
@@ -145,6 +204,31 @@ filename a.rb
         assert_eq!(b.lines, vec![0, 0, 1]);
         assert_eq!(b.commits[1].author, "Tomas");
         assert_eq!(b.commits[0].summary, "First commit");
+        assert_eq!(b.commits[1].tz, 7200);
+        // The newer commit comes first.
+        assert_eq!((b.commits[0].rank, b.commits[1].rank), (1, 0));
+    }
+
+    #[test]
+    fn short_dates() {
+        let c = |time: i64, tz: i32| Commit {
+            sha: String::new(),
+            author: "Mikael Henriksson".into(),
+            time,
+            tz,
+            summary: String::new(),
+            rank: 0,
+        };
+        // 2025-07-16 10:00 UTC.
+        let t = 1_752_660_000;
+        assert_eq!(c(t, 0).short_date(t + 3600), "Today");
+        assert_eq!(c(t, 0).short_date(t + 86_400), "Yesterday");
+        assert_eq!(c(t, 0).short_date(t + 86_400 * 3), "16/07/2025");
+        // 23:30 in UTC is the next day for an author in UTC+2.
+        assert_eq!(c(1_752_708_600, 7200).short_date(t + 86_400 * 3), "17/07/2025");
+        assert_eq!(c(951_782_400, 0).short_date(t), "29/02/2000");
+        assert_eq!(c(t, 0).last_name(), "Henriksson");
+        assert_eq!(parse_tz("-0530"), -(5 * 3600 + 30 * 60));
     }
 
     #[test]

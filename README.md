@@ -103,8 +103,9 @@ rubyscope                                            # see below
 6. Rest the pointer on a name for about half a second. A popup shows the
    signature, the docs, the definition location, the type that rubyscope
    found and how sure it is.
-7. Press Ctrl+B to show git blame. Rest the pointer on a blame block to see
-   the commit. Click it to open the commit, or its pull request, on GitHub.
+7. Press Ctrl+B to show git blame. Each line shows the date and the last name
+   of the author, as in RubyMine. The newest commits have the strongest blue.
+   Rest the pointer on a blame line to see the commit. Click it to open the commit, or its pull request, on GitHub.
 8. Press Ctrl+K to see all commands. Some commands have no key, for example
    "Index the project again" and "Open in editor".
 
