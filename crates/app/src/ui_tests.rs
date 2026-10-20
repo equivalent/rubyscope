@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use eframe::egui::{Event, Key, Modifiers, PointerButton, Pos2};
+use eframe::egui::{Event, Key, Modifiers, PointerButton, Pos2, Vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use rubyscope_index::{BuildOptions, Index};
@@ -507,4 +507,39 @@ fn start_screen_opens_a_folder_from_the_dialog() {
     let _ = h.state().worker.tx.send(crate::worker::Msg::PickedFolder(Some(root.clone())));
     let _ = h.run_ok();
     assert_eq!(h.state().root.as_deref(), Some(root.as_path()));
+}
+
+#[test]
+fn ctrl_c_copies_the_selected_text() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/services/billing.rb");
+    // Left of the middle of a letter, so the text position is before it.
+    let left = Vec2::new(2.0, 0.0);
+    let (from, to) = (point(&h, 1, 1) - left, point(&h, 1, 6) - left);
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let _ = h.run_ok();
+    h.event(Event::PointerMoved(to));
+    let _ = h.run_ok();
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    let _ = h.run_ok();
+    assert_eq!(h.state().current().unwrap().selected_text().as_deref(), Some("class"));
+
+    // egui-winit turns Ctrl+C into this event.
+    h.event(Event::Copy);
+    h.step();
+    let copied =
+        h.output().platform_output.commands.iter().any(|c| *c == eframe::egui::OutputCommand::CopyText("class".into()));
+    assert!(copied, "{:?}", h.output().platform_output.commands);
 }

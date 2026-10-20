@@ -465,9 +465,11 @@ pub fn code_view(
             file.hover = None;
         }
 
+        // The drag starts only after the pointer moves a few pixels, so the
+        // selection starts where the button went down, not where it is now.
         if response.drag_started_by(egui::PointerButton::Primary)
             && !ctrl
-            && let Some(off) = response.interact_pointer_pos().and_then(offset_at)
+            && let Some(off) = ui.input(|i| i.pointer.press_origin()).and_then(offset_at)
         {
             file.drag_anchor = Some(off);
             file.selection = Some((off, off));
