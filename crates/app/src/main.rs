@@ -57,10 +57,15 @@ fn main() -> eframe::Result {
     // The window class. A test run can set its own, so window rules for it
     // do not touch normal rubyscope windows.
     let app_id = std::env::var("RUBYSCOPE_APP_ID").unwrap_or_else(|_| "rubyscope".into());
+    // Wayland takes the icon from the desktop entry of the app id; X11 and
+    // macOS take this one.
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../../packaging/icon/rubyscope-256.png"))
+        .expect("the app icon is a valid PNG");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("rubyscope")
             .with_app_id(app_id)
+            .with_icon(icon)
             .with_inner_size([1400.0, 900.0])
             .with_min_inner_size([600.0, 400.0]),
         ..Default::default()

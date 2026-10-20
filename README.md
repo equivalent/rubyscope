@@ -47,6 +47,8 @@ This builds the release binaries and installs:
 - `~/.local/bin/rubyscope` (the window)
 - `~/.local/bin/rubyscope-cli` (the test command)
 - `~/.local/share/applications/rubyscope.desktop` (the app launcher entry)
+- `~/.local/share/icons/hicolor/*/apps/rubyscope.*` (the app icon, from
+  `packaging/icon/`)
 
 Make sure `~/.local/bin` is on your `PATH`.
 

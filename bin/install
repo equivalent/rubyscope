@@ -2,11 +2,18 @@
 # Builds rubyscope and installs it for this user:
 #   ~/.local/bin/rubyscope and ~/.local/bin/rubyscope-cli
 #   ~/.local/share/applications/rubyscope.desktop (the app launcher entry)
+#   ~/.local/share/icons/hicolor/*/apps/rubyscope.{svg,png} (the app icon)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cargo build --release -p rubyscope -p rubyscope-cli
 install -Dm755 target/release/rubyscope "$HOME/.local/bin/rubyscope"
 install -Dm755 target/release/rubyscope-cli "$HOME/.local/bin/rubyscope-cli"
 install -Dm644 packaging/rubyscope.desktop "$HOME/.local/share/applications/rubyscope.desktop"
+icons="$HOME/.local/share/icons/hicolor"
+install -Dm644 packaging/icon/rubyscope.svg "$icons/scalable/apps/rubyscope.svg"
+for size in 16 32 48 64 128 256 512; do
+  install -Dm644 "packaging/icon/rubyscope-$size.png" "$icons/${size}x${size}/apps/rubyscope.png"
+done
+command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$icons" || true
 command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" || true
 echo "Installed rubyscope. Run: rubyscope <project folder>"
