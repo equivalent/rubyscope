@@ -500,6 +500,46 @@ fn controller_action_goes_to_its_view_and_back() {
 }
 
 #[test]
+fn view_has_a_link_to_its_controller_action() {
+    let root = fixture();
+    for dir in ["app/controllers", "app/mailers", "app/views/invoices", "app/views/invoice_mailer"] {
+        std::fs::create_dir_all(root.join(dir)).unwrap();
+    }
+    std::fs::write(
+        root.join("app/controllers/invoices_controller.rb"),
+        "class InvoicesController < ApplicationController\n  def index; end\n\n  def edit\n    @invoice = Invoice.find(1)\n  end\nend\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("app/mailers/invoice_mailer.rb"),
+        "class InvoiceMailer < ApplicationMailer\n  def sent\n    mail\n  end\nend\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("app/views/invoices/edit.html.erb"), "<h1>Edit</h1>\n").unwrap();
+    std::fs::write(root.join("app/views/invoices/_row.html.erb"), "<tr></tr>\n").unwrap();
+    std::fs::write(root.join("app/views/invoice_mailer/sent.html.erb"), "<p>Sent</p>\n").unwrap();
+    let mut h = harness(&root);
+    // A partial has no action, so it has no bar.
+    open(&mut h, &root, "app/views/invoices/_row.html.erb");
+    assert!(h.query_by_label("Controller").is_none());
+    // A template has a link to its action, above the code.
+    open(&mut h, &root, "app/views/invoices/edit.html.erb");
+    shot(&mut h, "15-view-action-bar");
+    assert!(h.query_by_label("Controller").is_some());
+    h.get_by_label("InvoicesController#edit").click();
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "app/controllers/invoices_controller.rb");
+    assert_eq!(cursor_line(&h), 4);
+    // A mailer template links to its mailer method.
+    open(&mut h, &root, "app/views/invoice_mailer/sent.html.erb");
+    assert!(h.query_by_label("Mailer").is_some());
+    h.get_by_label("InvoiceMailer#sent").click();
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "app/mailers/invoice_mailer.rb");
+    assert_eq!(cursor_line(&h), 2);
+}
+
+#[test]
 fn start_screen_opens_a_folder_from_the_dialog() {
     let root = fixture();
     let mut h =

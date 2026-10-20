@@ -1138,6 +1138,45 @@ impl App {
         }
     }
 
+    /// The bar above the code of a view file: links to the controller
+    /// action (or mailer method) of the view. It does not scroll.
+    fn view_action_bar(&mut self, ui: &mut egui::Ui) {
+        let (Some(index), Some(file)) = (self.index.clone(), self.current_file_id()) else { return };
+        let actions = index.view_actions(file);
+        if actions.is_empty() {
+            return;
+        }
+        let theme = self.theme.clone();
+        // A class opened in many files gives many targets with one label.
+        let mut labels: Vec<&str> = Vec::new();
+        for t in &actions {
+            if !labels.contains(&t.label.as_str()) {
+                labels.push(&t.label);
+            }
+        }
+        let class = labels[0].split('#').next().unwrap_or_default();
+        let kind = if class.ends_with("Mailer") { "Mailer" } else { "Controller" };
+        let mut go = None;
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 2)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(kind).color(theme.fg_dim));
+                for label in &labels {
+                    let Some(t) = actions.iter().find(|t| t.label == *label) else { continue };
+                    let line = index.files[t.loc.file as usize].raw.line_of(t.loc.name_span.start) + 1;
+                    let at = format!("{}:{line}", index.display_path(t.loc.file));
+                    let r = ui.link(RichText::new(*label).color(theme.accent)).on_hover_text(at);
+                    if r.clicked() {
+                        go = Some((label.to_string(), r.rect.left_bottom()));
+                    }
+                }
+            });
+        });
+        if let Some((label, pos)) = go {
+            let targets = actions.iter().filter(|t| t.label == label).cloned().collect();
+            self.go_to_targets(label, targets, pos);
+        }
+    }
+
     fn find_bar(&mut self, ui: &mut egui::Ui) {
         let theme = self.theme.clone();
         let Some(t) = self.tabs.get_mut(self.active) else { return };
@@ -1469,6 +1508,7 @@ impl App {
                 return;
             }
             self.tab_bar(ui);
+            self.view_action_bar(ui);
             self.find_bar(ui);
             let index = self.index.clone();
             let file_id = self.current_file_id();
