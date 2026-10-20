@@ -30,6 +30,7 @@ fn parse_file_arg(arg: &str) -> (PathBuf, Option<u32>) {
 }
 
 fn main() -> eframe::Result {
+    external::use_login_shell_path();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut root: Option<PathBuf> = None;
     let mut open: Option<(PathBuf, Option<u32>)> = None;
