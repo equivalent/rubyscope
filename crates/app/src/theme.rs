@@ -141,12 +141,14 @@ impl Theme {
         }
     }
 
-    /// The color for a blame block: newer changes are stronger.
-    pub fn blame_age(&self, age_days: f32) -> Color32 {
-        let t = (1.0 - (age_days / 365.0).min(1.0)).powf(1.5);
-        let base = self.bg;
-        let hot = self.accent;
-        let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t * 0.16) as u8;
+    /// The color of a blame line, as in RubyMine: the newest commit of the
+    /// file is the strongest, and the color fades over the next commits to
+    /// plain gray.
+    pub fn blame_color(&self, rank: u32) -> Color32 {
+        const FADE: f32 = 6.0;
+        let t = (1.0 - rank as f32 / FADE).max(0.0);
+        let (base, hot) = (self.bg_light, self.accent);
+        let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t * 0.4) as u8;
         Color32::from_rgb(mix(base.r(), hot.r()), mix(base.g(), hot.g()), mix(base.b(), hot.b()))
     }
 

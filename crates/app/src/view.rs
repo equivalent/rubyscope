@@ -14,7 +14,12 @@ use crate::theme::{Theme, Token};
 
 pub const FONT_SIZE: f32 = 14.0;
 const TAB_WIDTH: usize = 2;
-const BLAME_WIDTH: f32 = 300.0;
+/// The blame column before the blame is loaded.
+const BLAME_WIDTH: f32 = 200.0;
+/// The blame text size, as a part of the code size.
+const BLAME_FONT: f32 = 0.92;
+/// The most characters of an author name in the blame column.
+const BLAME_NAME_CHARS: usize = 16;
 /// The mouse wheel scrolls this many times faster than egui's default.
 const WHEEL_SPEED: f32 = 3.0;
 /// Lines an arrow key (or j / k) scrolls.
@@ -161,7 +166,7 @@ impl OpenFile {
 /// What happened in the view this frame.
 #[derive(Debug, Default)]
 pub struct ViewEvents {
-    /// Ctrl+click: go to the definition at this offset.
+    /// Ctrl+click (Cmd+click on macOS): go to the definition at this offset.
     pub goto: Option<(u32, Pos2)>,
     /// Right click at this offset.
     pub context: Option<u32>,
@@ -259,12 +264,20 @@ pub fn code_view(
     let row_h = row_height(ui);
     let char_w = char_width(ui);
     let digits = (file.lines.len().max(1) as f32).log10().floor() as usize + 1;
-    let blame_w = if show_blame { BLAME_WIDTH } else { 0.0 };
+    let blame_w = match (show_blame, &file.blame) {
+        (false, _) => 0.0,
+        (true, None) => BLAME_WIDTH,
+        (true, Some(blame)) => {
+            let name = blame.commits.iter().map(|c| c.last_name().chars().count()).max().unwrap_or(0);
+            // `16/07/2025 Novak`, and space on both sides.
+            (11 + name.min(BLAME_NAME_CHARS)) as f32 * char_w * BLAME_FONT + 22.0
+        }
+    };
     let gutter_w = digits as f32 * char_w + 24.0;
     let code_x = blame_w + gutter_w;
     let width = code_x + (file.max_line_chars as f32 + 4.0) * char_w;
     let time = ui.input(|i| i.time);
-    let ctrl = ui.input(|i| i.modifiers.ctrl);
+    let ctrl = ui.input(|i| crate::keys::cmd_held(i.modifiers));
 
     let mut area = egui::ScrollArea::both()
         .auto_shrink([false, false])
@@ -359,39 +372,36 @@ pub fn code_view(
             }
         }
 
-        // Blame column.
+        // Blame column, as in RubyMine: the date and the author's last name
+        // on each line. The lines of the commit under the pointer, or else
+        // of the cursor line, have brighter text.
         if let (true, Some(blame)) = (show_blame, file.blame.clone()) {
-            let mut prev: Option<u32> = range.start.checked_sub(1).and_then(|l| blame.lines.get(l).copied());
+            let line_at = |pos: Pos2| range.start + ((pos.y - rect.top()) / row_h) as usize;
+            let active = response
+                .hover_pos()
+                .filter(|p| p.x < rect.left() + blame_w)
+                .map(line_at)
+                .or(file.cursor.map(|c| file.line_of(c) as usize))
+                .and_then(|l| blame.lines.get(l).copied());
+            let blame_font = FontId::monospace(FONT_SIZE * BLAME_FONT);
             for (i, line) in range.clone().enumerate() {
                 let Some(c) = blame.lines.get(line).copied() else { break };
                 let commit = &blame.commits[c as usize];
-                let age = ((now_secs - commit.time).max(0) as f32) / 86_400.0;
-                let r = Rect::from_min_size(Pos2::new(rect.left(), row_top(i)), Vec2::new(blame_w - 6.0, row_h));
-                painter.rect_filled(r, 0.0, theme.blame_age(age));
-                if prev != Some(c) {
-                    let when = crate::git::relative_time(commit.time, now_secs);
-                    let author: String =
-                        commit.author.split_whitespace().next().unwrap_or("").chars().take(10).collect();
-                    let label = if commit.is_uncommitted() {
-                        "not committed yet".to_string()
-                    } else {
-                        format!("{author:<10} {when:<14} {}", commit.summary)
-                    };
-                    let max_chars = ((blame_w - 16.0) / (char_w * 0.86)) as usize;
-                    let label: String = label.chars().take(max_chars).collect();
-                    painter.text(
-                        Pos2::new(r.left() + 6.0, r.center().y),
-                        Align2::LEFT_CENTER,
-                        label,
-                        FontId::monospace(FONT_SIZE * 0.86),
-                        theme.fg,
-                    );
-                    painter.line_segment(
-                        [Pos2::new(r.left(), r.top()), Pos2::new(r.right(), r.top())],
-                        Stroke::new(1.0, theme.bg_dark),
-                    );
+                // Lines that are not committed yet stay empty.
+                if commit.is_uncommitted() {
+                    continue;
                 }
-                prev = Some(c);
+                let r = Rect::from_min_size(Pos2::new(rect.left(), row_top(i)), Vec2::new(blame_w - 6.0, row_h));
+                painter.rect_filled(r, 0.0, theme.blame_color(commit.rank));
+                let name: String = commit.last_name().chars().take(BLAME_NAME_CHARS).collect();
+                let color = if active == Some(c) { theme.fg_bright } else { theme.fg.gamma_multiply(0.7) };
+                painter.text(
+                    Pos2::new(r.left() + 8.0, r.center().y),
+                    Align2::LEFT_CENTER,
+                    format!("{:<10} {name}", commit.short_date(now_secs)),
+                    blame_font.clone(),
+                    color,
+                );
             }
         } else if show_blame {
             painter.text(
@@ -496,8 +506,10 @@ pub fn code_view(
                 && let Some(blame) = &file.blame
             {
                 let line = range.start + ((pos.y - rect.top()) / row_h) as usize;
-                if let Some(c) = blame.lines.get(line) {
-                    events.blame_click = Some(blame.commits[*c as usize].sha.clone());
+                if let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
+                    && !commit.is_uncommitted()
+                {
+                    events.blame_click = Some(commit.sha.clone());
                 }
             }
         }
@@ -519,8 +531,9 @@ pub fn code_view(
             && pos.x < rect.left() + blame_w
         {
             let line = range.start + ((pos.y - rect.top()) / row_h) as usize;
-            if let Some(c) = blame.lines.get(line) {
-                let commit = &blame.commits[*c as usize];
+            if let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
+                && !commit.is_uncommitted()
+            {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                 let text = format!(
                     "{}\n{} · {}\n{}\n\nClick to open on GitHub",
@@ -556,7 +569,7 @@ fn scroll_keys(ui: &egui::Ui, file: &mut OpenFile, row_h: f32, char_w: f32) -> O
         let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { continue };
         let at = to.unwrap_or(file.scroll);
         let (mut x, mut y) = (at.x, at.y);
-        let plain = !modifiers.ctrl && !modifiers.alt;
+        let plain = !modifiers.ctrl && !modifiers.alt && !modifiers.mac_cmd;
         if key != egui::Key::G || !plain || modifiers.shift {
             file.pending_g = None;
         }

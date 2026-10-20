@@ -10,7 +10,7 @@ use rubyscope_index::model::Span;
 use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Target};
 
 use crate::external;
-use crate::keys::{Action, Keymap};
+use crate::keys::{self, Action, Keymap};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
 use crate::theme::Theme;
 use crate::tree::FileTree;
@@ -152,8 +152,16 @@ fn remember_project(root: &Path) {
     }
 }
 
-/// The first font file fontconfig gives for a pattern.
+/// The first font file fontconfig gives for a pattern. macOS has no
+/// fontconfig, so there it reads system fonts that every Mac has.
 fn font_file(pattern: &str) -> Option<Vec<u8>> {
+    if cfg!(target_os = "macos") {
+        let files: &[&str] = match pattern {
+            "monospace" => &["/System/Library/Fonts/Menlo.ttc"],
+            _ => &["/System/Library/Fonts/Supplemental/Arial Unicode.ttf", "/System/Library/Fonts/Apple Symbols.ttf"],
+        };
+        return files.iter().find_map(|f| std::fs::read(f).ok());
+    }
     let out = std::process::Command::new("fc-match").args(["-f", "%{file}", pattern]).output().ok()?;
     let file = String::from_utf8_lossy(&out.stdout).to_string();
     (file.ends_with(".ttf") || file.ends_with(".otf")).then(|| std::fs::read(&file).ok()).flatten()
@@ -869,7 +877,10 @@ impl App {
             ui.add_space(80.0);
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new("rubyscope").size(32.0).color(theme.fg_bright));
-                ui.label(RichText::new("Read Ruby code. Ctrl+click to go to a definition.").color(theme.fg_dim));
+                ui.label(
+                    RichText::new(format!("Read Ruby code. {}+click to go to a definition.", keys::CMD))
+                        .color(theme.fg_dim),
+                );
                 ui.add_space(24.0);
                 ui.horizontal(|ui| {
                     ui.add_space((ui.available_width() - 590.0).max(0.0) / 2.0);
@@ -882,7 +893,7 @@ impl App {
                     if ui.button("Open").clicked() || enter {
                         open = Some(self.welcome_path.clone());
                     }
-                    if ui.button("Browse…").on_hover_text("Choose a folder (Ctrl+O)").clicked() {
+                    if ui.button("Browse…").on_hover_text(format!("Choose a folder ({}+O)", keys::CMD)).clicked() {
                         browse = true;
                     }
                 });
@@ -893,7 +904,9 @@ impl App {
                     }
                 }
                 ui.add_space(24.0);
-                ui.label(RichText::new("Ctrl+Q to quit").color(theme.muted).small());
+                if let Some(quit) = self.keys.shortcut(Action::CloseProject) {
+                    ui.label(RichText::new(format!("{} to quit", quit.label())).color(theme.muted).small());
+                }
             });
         });
         if browse {
@@ -953,7 +966,7 @@ impl App {
                     self.open_path(&path, Some(loc.name_span.start), None, true);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Commands").on_hover_text("Ctrl+K").clicked() {
+                    if ui.button("Commands").on_hover_text(format!("{}+K", keys::CMD)).clicked() {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }
                     let busy = self.worker.building.load(std::sync::atomic::Ordering::SeqCst);
@@ -1557,9 +1570,10 @@ impl App {
                 ui.vertical_centered(|ui| {
                     ui.add_space(120.0);
                     ui.label(
-                        RichText::new(
-                            "Ctrl+P to open a file · Ctrl+T to find a class or method · Ctrl+K for all commands",
-                        )
+                        RichText::new(format!(
+                            "{c}+P to open a file · {c}+T to find a class or method · {c}+K for all commands",
+                            c = keys::CMD
+                        ))
                         .color(theme.fg_dim),
                     );
                 });

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Runs every check that must pass before a push, the same way CI would:
+#   1. formatting (cargo fmt)
+#   2. lints, with warnings as errors (cargo clippy)
+#   3. all tests: index rules, Rails rules, saved index, window tests (cargo test)
+#   4. Ruby syntax of the Rails probe (skipped when ruby is not installed)
+#   5. no private local paths or secret files in the files git tracks
+# It stops at the first step that fails and exits with status 1.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# CI does not see your private project, so the real-project smoke test must not run.
+unset RUBYSCOPE_PROJECT RUBYSCOPE_SHOTS
+
+step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
+fail() { printf '\n\033[1;31mbin/ci failed: %s\033[0m\n' "$1"; exit 1; }
+
+step "Formatting (cargo fmt --check)"
+cargo fmt --all --check || fail "formatting. Run: cargo fmt --all"
+
+step "Lints (cargo clippy, warnings are errors)"
+cargo clippy --workspace --all-targets --locked -- -D warnings || fail "clippy"
+
+step "Tests (cargo test)"
+cargo test --workspace --locked || fail "tests"
+
+step "Ruby syntax of the Rails probe"
+if command -v ruby >/dev/null; then
+  ruby -c probe/rails_probe.rb >/dev/null || fail "probe/rails_probe.rb has a syntax error"
+  echo "Syntax OK"
+else
+  echo "ruby is not installed, skipped"
+fi
+
+step "No private paths or secret files in the repo"
+# Tracked files plus new files that are not ignored, so a file is checked before it is committed.
+files=$(git ls-files --cached --others --exclude-standard | grep -v '^bin/ci$' || true)
+if echo "$files" | grep -E '(^|/)\.env' ; then fail "a .env file is in the repo"; fi
+if echo "$files" | xargs -r -d '\n' grep -I -n -E '/home/[a-z0-9_-]+/|/Users/[A-Za-z0-9_-]+/' ; then
+  fail "a private local path is in the files above. Use ~ or a made-up path."
+fi
+echo "OK"
+
+printf '\n\033[1;32mbin/ci passed\033[0m\n'

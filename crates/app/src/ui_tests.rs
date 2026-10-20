@@ -14,6 +14,9 @@ use rubyscope_index::{BuildOptions, Index};
 
 use crate::app::{App, Bottom};
 
+/// The key that the shortcuts use: Cmd on macOS, Ctrl elsewhere.
+const CMD: Modifiers = if crate::keys::MAC { Modifiers::MAC_CMD } else { Modifiers::CTRL };
+
 const FILES: &[(&str, &str)] = &[
     ("Gemfile", "source \"https://rubygems.org\"\n"),
     (
@@ -101,7 +104,7 @@ fn point(h: &Harness<'static, App>, line: usize, col: usize) -> Pos2 {
 }
 
 fn ctrl_click(h: &mut Harness<'static, App>, pos: Pos2) {
-    let mods = Modifiers::CTRL;
+    let mods = CMD;
     h.event(Event::ModifiersChanged(mods));
     h.event(Event::PointerMoved(pos));
     let _ = h.run_ok();
@@ -131,7 +134,7 @@ fn go_to_file_with_ctrl_p() {
     let root = fixture();
     let mut h = harness(&root);
     shot(&mut h, "01-empty");
-    press(&mut h, Modifiers::CTRL, Key::P);
+    press(&mut h, CMD, Key::P);
     type_text(&mut h, "billing");
     shot(&mut h, "02-ctrl-p");
     press(&mut h, Modifiers::NONE, Key::Enter);
@@ -207,20 +210,20 @@ fn blame_panel_and_command_list() {
     let root = fixture();
     let mut h = harness(&root);
     open(&mut h, &root, "app/models/invoice.rb");
-    press(&mut h, Modifiers::CTRL, Key::B);
+    press(&mut h, CMD, Key::B);
     settle(&mut h);
     let t = h.state().current().unwrap();
     let blame = t.blame.as_ref().expect("blame loaded");
     assert_eq!(blame.commits[0].author, "Test Author");
     shot(&mut h, "07-blame");
-    press(&mut h, Modifiers::CTRL, Key::K);
+    press(&mut h, CMD, Key::K);
     type_text(&mut h, "usages");
     shot(&mut h, "08-commands");
     h.get_by_label_contains("Find usages");
     press(&mut h, Modifiers::NONE, Key::Escape);
     assert!(h.state().picker.is_none());
     // Ctrl+Shift+B hides the side bar.
-    press(&mut h, Modifiers::CTRL | Modifiers::SHIFT, Key::B);
+    press(&mut h, CMD | Modifiers::SHIFT, Key::B);
     assert!(!h.state().show_sidebar);
 }
 
@@ -228,20 +231,20 @@ fn blame_panel_and_command_list() {
 fn go_to_symbol_and_line() {
     let root = fixture();
     let mut h = harness(&root);
-    press(&mut h, Modifiers::CTRL, Key::T);
+    press(&mut h, CMD, Key::T);
     type_text(&mut h, "Invoice#pay");
     shot(&mut h, "09-ctrl-t");
     press(&mut h, Modifiers::NONE, Key::Enter);
     settle(&mut h);
     assert_eq!(current_rel(&h), "app/models/invoice.rb");
     assert_eq!(cursor_line(&h), 6);
-    press(&mut h, Modifiers::CTRL, Key::G);
+    press(&mut h, CMD, Key::G);
     type_text(&mut h, "3");
     press(&mut h, Modifiers::NONE, Key::Enter);
     settle(&mut h);
     assert_eq!(cursor_line(&h), 3);
     // Ctrl+W closes the tab.
-    press(&mut h, Modifiers::CTRL, Key::W);
+    press(&mut h, CMD, Key::W);
     assert!(h.state().tabs.is_empty());
 }
 
@@ -250,7 +253,7 @@ fn find_in_file() {
     let root = fixture();
     let mut h = harness(&root);
     open(&mut h, &root, "app/services/billing.rb");
-    press(&mut h, Modifiers::CTRL, Key::F);
+    press(&mut h, CMD, Key::F);
     type_text(&mut h, "invoice");
     shot(&mut h, "10-find");
     let t = h.state().current().unwrap();
@@ -280,14 +283,14 @@ fn real_project_smoke() {
     shot(&mut h, "21-project-schema");
     // Ctrl+T over every symbol of the project and its gems.
     let t = std::time::Instant::now();
-    press(&mut h, Modifiers::CTRL, Key::T);
+    press(&mut h, CMD, Key::T);
     type_text(&mut h, "ApplicationRecord");
     eprintln!("ctrl+t: {:?}", t.elapsed());
     shot(&mut h, "22-project-ctrl-t");
     press(&mut h, Modifiers::NONE, Key::Enter);
     settle(&mut h);
     assert_eq!(current_rel(&h), "app/models/application_record.rb");
-    press(&mut h, Modifiers::CTRL, Key::B);
+    press(&mut h, CMD, Key::B);
     for _ in 0..40 {
         std::thread::sleep(Duration::from_millis(100));
         let _ = h.run_ok();
@@ -352,7 +355,8 @@ fn changed_files_are_indexed_again() {
     let mut h = harness(&root);
     // Use the real background worker and file watcher.
     h.state_mut().open_project(root.clone());
-    for _ in 0..100 {
+    // Wait up to 30 s: when all tests run at once, the machine is busy and indexing is slow.
+    for _ in 0..600 {
         std::thread::sleep(Duration::from_millis(50));
         let _ = h.run_ok();
         if h.state().index.as_ref().is_some_and(|i| i.consts.contains_key("Billing")) {
@@ -362,7 +366,7 @@ fn changed_files_are_indexed_again() {
     open(&mut h, &root, "app/services/billing.rb");
     std::fs::write(root.join("app/services/refund.rb"), "class Refund\nend\n").unwrap();
     let mut found = false;
-    for _ in 0..120 {
+    for _ in 0..600 {
         std::thread::sleep(Duration::from_millis(50));
         let _ = h.run_ok();
         if h.state().index.as_ref().is_some_and(|i| i.consts.contains_key("Refund")) {
@@ -455,7 +459,7 @@ fn keys_scroll_the_code() {
     let _ = h.run_ok();
     assert_eq!(y(&h), 0.0);
     // Keys typed in a text field do not scroll.
-    press(&mut h, Modifiers::CTRL, Key::F);
+    press(&mut h, CMD, Key::F);
     type_text(&mut h, "j");
     press(&mut h, Modifiers::NONE, Key::J);
     assert_eq!(y(&h), 0.0);

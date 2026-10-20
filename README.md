@@ -1,7 +1,7 @@
 # rubyscope
 
-rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl and
-click a name to go to its definition. The name can be a class, module,
+rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl (Cmd
+on macOS) and click a name to go to its definition. The name can be a class, module,
 constant, method, route helper, translation key, partial, RSpec `let` or
 factory. rubyscope reads code only. It never changes a file.
 
@@ -19,8 +19,9 @@ the end tells what is done.
 
 ## Requirements
 
-- Linux. rubyscope is built and used on Wayland (Hyprland). The build also
-  has X11 support, but it is not checked. macOS is planned for later.
+- Linux or macOS. On Linux, rubyscope is built and used on Wayland
+  (Hyprland). The build also has X11 support, but it is not checked. On
+  macOS it runs on Apple silicon.
 - Rust 1.88 or newer.
 - clang and libclang. The `ruby-prism` crate compiles the Prism C parser
   and makes its Rust bindings with bindgen.
@@ -32,8 +33,8 @@ the end tells what is done.
 | Installed gems (`bundle install`) | Clicks that go into gem source. Only gems that are installed are indexed. |
 | `git` | Git blame and "Open on GitHub" |
 | `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit |
-| `fc-match` (fontconfig) | The system monospace font for code |
-| `xdg-open` | Opens links in the browser |
+| `fc-match` (fontconfig) | Linux: the system monospace font for code. macOS uses Menlo. |
+| `xdg-open` | Linux: opens links in the browser. macOS uses `open`. |
 | Omarchy | Colors from the current Omarchy theme. Without Omarchy, the colors are Tokyo Night. |
 
 ## Build and install
@@ -51,6 +52,24 @@ This builds the release binaries and installs:
   `packaging/icon/`)
 
 Make sure `~/.local/bin` is on your `PATH`.
+
+On macOS, run this:
+
+```
+bin/install-macos
+```
+
+It builds the release binaries and installs:
+
+- `~/Applications/rubyscope.app` (open it from Spotlight, Launchpad or the
+  Dock)
+- `~/.local/bin/rubyscope` (a link to the binary in the app)
+- `~/.local/bin/rubyscope-cli` (the test command)
+
+An app started from Finder or the Dock gets only the system `PATH`. So on
+macOS, rubyscope reads the `PATH` from your login shell when it starts.
+Then `ruby` is the Ruby of rbenv, mise or Homebrew, the same as in the
+terminal.
 
 To build without installing:
 
@@ -103,8 +122,9 @@ rubyscope                                            # see below
 6. Rest the pointer on a name for about half a second. A popup shows the
    signature, the docs, the definition location, the type that rubyscope
    found and how sure it is.
-7. Press Ctrl+B to show git blame. Rest the pointer on a blame block to see
-   the commit. Click it to open the commit, or its pull request, on GitHub.
+7. Press Ctrl+B to show git blame. Each line shows the date and the last name
+   of the author, as in RubyMine. The newest commits have the strongest blue.
+   Rest the pointer on a blame line to see the commit. Click it to open the commit, or its pull request, on GitHub.
 8. Press Ctrl+K to see all commands. Some commands have no key, for example
    "Index the project again" and "Open in editor".
 
@@ -133,6 +153,10 @@ rubyscope                                            # see below
 | Middle-click a tab | Close the tab |
 
 ## Keys
+
+On macOS, use Cmd where this README says Ctrl. Ctrl+Tab and Ctrl+Shift+Tab
+stay on Ctrl, because Cmd+Tab switches apps. Ctrl+D and Ctrl+U also stay on
+Ctrl, as in Vim.
 
 | Key | What it does |
 |---|---|
@@ -188,7 +212,8 @@ can give them one (see below).
 
 "Open in editor" uses `omarchy-launch-editor` when it is on `PATH`.
 Otherwise it opens nvim in a terminal with `xdg-terminal-exec`, or runs
-`nvim`. "Open on GitHub" needs an `origin` remote on github.com. It opens
+`nvim`. On macOS it opens nvim in a new Terminal window. The first time,
+macOS asks if rubyscope can control Terminal. "Open on GitHub" needs an `origin` remote on github.com. It opens
 the line at the commit that `HEAD` points to.
 
 ### Change the keys
@@ -198,15 +223,16 @@ replaces the default key of that command. The other commands keep their
 defaults.
 
 ```toml
-toggle_blame = "ctrl+alt+b"
+toggle_blame = "cmd+alt+b"
 find_usages = "alt+u"
 back = "alt+left"
 forward = "alt+right"
 reindex = "f5"
 ```
 
-A key is modifiers and one key, joined with `+`. The modifiers are `ctrl`,
-`shift` and `alt`. The key can be a letter, a digit, `esc`, `tab`, `enter`,
+A key is modifiers and one key, joined with `+`. The modifiers are `cmd`,
+`ctrl`, `shift` and `alt`. `cmd` is Cmd on macOS and Ctrl on Linux, so one
+file works on both. `ctrl` is always the Ctrl key. The key can be a letter, a digit, `esc`, `tab`, `enter`,
 `space`, `left`, `right`, `up`, `down` or `f1` to `f12`. rubyscope reads
 this file when it starts.
 
@@ -414,6 +440,18 @@ probe skips that constant and tells how many constants it skipped.
 
 ## Tests
 
+Run every check before a push, the same way a CI server would:
+
+```
+bin/ci
+```
+
+It checks formatting (`cargo fmt`), runs clippy with warnings as errors,
+runs all the tests below, checks the Ruby syntax of the probe, and looks for
+private local paths in the repo. It stops at the first step that fails.
+
+To run only some of the tests:
+
 ```
 cargo test                                           # index rules, a Rails app in memory, saved index, window tests
 RUBYSCOPE_SHOTS=/tmp/shots cargo test -p rubyscope   # also save window screenshots
@@ -441,6 +479,7 @@ RUBYSCOPE_PROJECT=~/code/shop cargo test -p rubyscope real_project_smoke -- --no
 | `probe/rails_probe.rb` | The script that gets real locations from booted Rails |
 | `plans/001-rubyscope-v1.md` | The design plan, with its status at the end |
 | `bin/install` | Builds and installs rubyscope for this user |
+| `bin/ci` | Runs every check before a push: formatting, clippy, tests, private paths |
 | `packaging/rubyscope.desktop` | The app launcher entry |
 
 Main files in `crates/index/src`:
