@@ -43,7 +43,7 @@ pub struct RubyEnv {
 impl RubyEnv {
     /// Asks the Ruby that the project uses (through mise, rbenv or PATH).
     pub fn detect(project: &Path) -> Result<Self> {
-        let out = Command::new("ruby")
+        let out = Command::new(ruby_for(project))
             .current_dir(project)
             .args(["-rjson", "-e", "print JSON.dump(gem_path: Gem.path, rubylibdir: RbConfig::CONFIG['rubylibdir'])"])
             .output()
@@ -51,6 +51,21 @@ impl RubyEnv {
         anyhow::ensure!(out.status.success(), "ruby failed: {}", String::from_utf8_lossy(&out.stderr));
         Ok(serde_json::from_slice(&out.stdout)?)
     }
+}
+
+/// The Ruby of the project folder. `ruby` from PATH is not enough: mise
+/// and rbenv choose the Ruby when a shell goes into a folder, so PATH can
+/// hold the Ruby of another folder, whose gem folder does not have the
+/// project's gems.
+fn ruby_for(project: &Path) -> PathBuf {
+    for manager in ["mise", "rbenv"] {
+        let Ok(out) = Command::new(manager).current_dir(project).args(["which", "ruby"]).output() else { continue };
+        let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+        if out.status.success() && path.is_file() {
+            return path;
+        }
+    }
+    PathBuf::from("ruby")
 }
 
 pub const RUBY_EXTENSIONS: &[&str] = &["rb", "rake", "ru", "gemspec", "jbuilder", "rbs"];

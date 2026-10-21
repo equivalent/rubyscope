@@ -232,6 +232,80 @@ fn zeitwerk_folder_namespace_counts_as_known() {
 }
 
 #[test]
+fn phlex_kit_calls_go_to_the_component() {
+    // `extend Phlex::Kit` makes a method for each component of the kit, so
+    // `ShopUI::Page(...)` and `Page(...)` render `ShopUI::Page`.
+    let p = Project::new(&[
+        ("config/initializers/phlex.rb", "module ShopUI\n  extend Phlex::Kit\nend\n"),
+        ("app/components/shop_ui/base.rb", "module ShopUI\n  class Base < Phlex::HTML; end\nend\n"),
+        (
+            "app/components/shop_ui/page.rb",
+            "module ShopUI\n  class Page < ShopUI::Base\n    def view_template = Header(title: 1)\n  end\nend\n",
+        ),
+        ("app/components/shop_ui/header.rb", "module ShopUI\n  class Header < ShopUI::Base; end\nend\n"),
+        (
+            "app/views/orders/index.rb",
+            "module Views\n  class Index\n    include ShopUI\n    def view_template\n      ShopUI::Page(title: 1) do\n        ::ShopUI::Header()\n        Page()\n      end\n    end\n  end\nend\n",
+        ),
+    ]);
+    let view = "app/views/orders/index.rb";
+    assert_eq!(p.first(view, "Page(title", 0), "ShopUI::Page @ app/components/shop_ui/page.rb:2");
+    assert_eq!(p.first(view, "Header()", 0), "ShopUI::Header @ app/components/shop_ui/header.rb:2");
+    assert_eq!(p.first(view, "Page()", 0), "ShopUI::Page @ app/components/shop_ui/page.rb:2");
+    assert_eq!(
+        p.first("app/components/shop_ui/page.rb", "Header(", 0),
+        "ShopUI::Header @ app/components/shop_ui/header.rb:2"
+    );
+}
+
+#[test]
+fn phlex_kit_call_in_a_module_uses_the_classes_that_include_it() {
+    let p = Project::new(&[
+        ("config/initializers/phlex.rb", "module ShopUI\n  extend Phlex::Kit\nend\n"),
+        ("app/components/shop_ui/badge.rb", "module ShopUI\n  class Badge < Phlex::HTML; end\nend\n"),
+        ("app/components/concerns/badges.rb", "module Badges\n  def status_cell = Badge(:sm)\nend\n"),
+        (
+            "app/components/application_component.rb",
+            "class ApplicationComponent < Phlex::HTML\n  include ShopUI\n  include Badges\nend\n",
+        ),
+    ]);
+    assert_eq!(
+        p.click("app/components/concerns/badges.rb", "Badge(", 0),
+        vec!["ShopUI::Badge @ app/components/shop_ui/badge.rb:2".to_string()]
+    );
+}
+
+#[test]
+fn phlex_kit_call_on_an_unknown_receiver_lists_kit_components() {
+    let p = Project::new(&[
+        ("config/initializers/phlex.rb", "module ShopUI\n  extend Phlex::Kit\nend\n"),
+        ("app/components/shop_ui/submit.rb", "module ShopUI\n  class Submit < Phlex::HTML; end\nend\n"),
+        ("app/components/order_form.rb", "class OrderForm\n  def footer(f) = f.Submit(:primary)\nend\n"),
+    ]);
+    assert_eq!(
+        p.click("app/components/order_form.rb", "Submit", 0),
+        vec!["ShopUI::Submit @ app/components/shop_ui/submit.rb:2 (name only)".to_string()]
+    );
+}
+
+#[test]
+fn folder_namespace_lists_its_classes() {
+    // No file defines `module Audit`; Zeitwerk makes it for the folder.
+    let p = Project::new(&[
+        ("app/events/audit/read.rb", "class Audit::Read < Event; end\n"),
+        ("app/events/audit/created.rb", "class Audit::Created < Event; end\n"),
+        ("app/models/order.rb", "class Order\n  def log = Audit::Read.record\nend\n"),
+    ]);
+    assert_eq!(
+        p.click("app/models/order.rb", "Audit", 0),
+        vec![
+            "Audit::Created @ app/events/audit/created.rb:1".to_string(),
+            "Audit::Read @ app/events/audit/read.rb:1".to_string()
+        ]
+    );
+}
+
+#[test]
 fn private_def_keeps_the_method() {
     let p = Project::new(&[("a.rb", "class A\n  def run = secret\n  private def secret; end\nend\n")]);
     assert_eq!(p.first("a.rb", "secret\n", 0), "A#secret @ a.rb:3");
