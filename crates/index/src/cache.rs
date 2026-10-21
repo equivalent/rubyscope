@@ -7,9 +7,15 @@
 //! local variables) stays as bytes until a click or "find usages" needs
 //! it. Most of the size is in the bodies.
 //!
+//! The saved file is mapped into memory, not read. The bodies stay in the
+//! file, so the system can drop their pages when it needs memory. rubyscope
+//! never changes a saved file: `write` writes a new file and renames it, so
+//! a map of the old file stays valid.
+//!
 //! The file is `MAGIC`, the length of the header, the header (postcard),
-//! then the head and body blobs of each file, so the heads can be read in
-//! parallel.
+//! the head blob of each file, then the body blob of each file. The heads
+//! can be read in parallel, and they are all together, so the start reads
+//! no page of a body.
 
 use std::collections::HashMap;
 use std::fs::Metadata;
@@ -25,7 +31,11 @@ use serde::{Deserialize, Serialize};
 use crate::index::Index;
 use crate::model::{LocalAssign, RawFile, RawRef};
 
-const MAGIC: &[u8; 8] = b"RBSCOPE2";
+const MAGIC: &[u8; 8] = b"RBSCOPE3";
+
+/// Bytes that bodies point into: the mapped saved file, or the bytes of
+/// one body that was just parsed.
+type Bytes = Arc<dyn AsRef<[u8]> + Send + Sync>;
 
 /// A fingerprint of the index code. A file saved by other code is not read.
 const FINGERPRINT: &str = env!("RUBYSCOPE_INDEX_FINGERPRINT");
@@ -61,7 +71,7 @@ pub struct BodyData {
 /// The body of a file: decoded, or still as bytes in the saved index.
 pub struct Body {
     data: OnceLock<BodyData>,
-    saved: Option<(Arc<Vec<u8>>, Range<usize>)>,
+    saved: Option<(Bytes, Range<usize>)>,
 }
 
 impl std::fmt::Debug for Body {
@@ -77,15 +87,32 @@ impl Body {
 
     pub fn get(&self) -> &BodyData {
         self.data.get_or_init(|| match &self.saved {
-            Some((bytes, range)) => postcard::from_bytes(&bytes[range.clone()]).unwrap_or_default(),
+            Some((bytes, range)) => postcard::from_bytes(&(**bytes).as_ref()[range.clone()]).unwrap_or_default(),
             None => BodyData::default(),
         })
+    }
+
+    /// Runs `f` on the body. A body that is still bytes is decoded for
+    /// this call only, and not kept.
+    pub fn with<R>(&self, f: impl FnOnce(&BodyData) -> R) -> R {
+        if let Some(data) = self.data.get() {
+            return f(data);
+        }
+        match &self.saved {
+            Some((bytes, range)) => f(&postcard::from_bytes(&(**bytes).as_ref()[range.clone()]).unwrap_or_default()),
+            None => f(&BodyData::default()),
+        }
+    }
+
+    /// True when the body is decoded and kept in memory.
+    pub fn is_decoded(&self) -> bool {
+        self.data.get().is_some()
     }
 
     /// The saved bytes, or the body encoded again.
     fn bytes(&self) -> Result<std::borrow::Cow<'_, [u8]>> {
         Ok(match &self.saved {
-            Some((bytes, range)) => std::borrow::Cow::Borrowed(&bytes[range.clone()]),
+            Some((bytes, range)) => std::borrow::Cow::Borrowed(&(**bytes).as_ref()[range.clone()]),
             None => std::borrow::Cow::Owned(postcard::to_stdvec(self.get())?),
         })
     }
@@ -94,7 +121,12 @@ impl Body {
 /// Splits what extraction found into the head and the body.
 pub fn split(mut raw: RawFile) -> (Arc<RawFile>, Arc<Body>) {
     let body = BodyData { refs: std::mem::take(&mut raw.refs), locals: std::mem::take(&mut raw.locals) };
-    (Arc::new(raw), Arc::new(Body::new(body)))
+    // Keep the body as bytes, the same as a body from the saved index. The
+    // decoded form is about four times bigger, and most files are never
+    // clicked.
+    let Ok(bytes) = postcard::to_stdvec(&body) else { return (Arc::new(raw), Arc::new(Body::new(body))) };
+    let len = bytes.len();
+    (Arc::new(raw), Arc::new(Body { data: OnceLock::new(), saved: Some((Arc::new(bytes), 0..len)) }))
 }
 
 /// A parsed file that a build can take: its stamp, head and body.
@@ -161,7 +193,11 @@ pub fn file_for(cache_dir: &Path, project: &Path) -> PathBuf {
 
 /// Reads a saved index. Fails when there is none, or when other code saved it.
 pub fn read(path: &Path) -> Result<Reuse> {
-    let bytes = Arc::new(std::fs::read(path).with_context(|| format!("reading {}", path.display()))?);
+    let file = std::fs::File::open(path).with_context(|| format!("reading {}", path.display()))?;
+    // SAFETY: rubyscope never changes a saved file in place (see the top of
+    // this file). Every length in the file is checked before it is used.
+    let map = Arc::new(unsafe { memmap2::Mmap::map(&file) }.with_context(|| format!("mapping {}", path.display()))?);
+    let bytes: &[u8] = map.as_ref();
     if bytes.len() < 16 || &bytes[..8] != MAGIC {
         bail!("not a rubyscope index");
     }
@@ -170,23 +206,34 @@ pub fn read(path: &Path) -> Result<Reuse> {
     if header.fingerprint != FINGERPRINT {
         bail!("saved by other code");
     }
-    let mut at = 16 + header_len;
+    let heads_start = 16 + header_len;
+    let heads_len: u64 = header.files.iter().map(|f| f.2).sum();
+    let (mut head_at, mut body_at) = (heads_start, heads_start + heads_len as usize);
     let mut entries = Vec::with_capacity(header.files.len());
     for (path, stamp, head_len, body_len) in header.files {
-        let head = at..at + head_len as usize;
-        let body = head.end..head.end + body_len as usize;
+        let head = head_at..head_at + head_len as usize;
+        let body = body_at..body_at + body_len as usize;
         anyhow::ensure!(body.end <= bytes.len(), "short file");
-        at = body.end;
+        (head_at, body_at) = (head.end, body.end);
         entries.push((path, stamp, head, body));
     }
+    // A click reads the body of one file. Reading ahead would only load
+    // the bodies of other files.
+    #[cfg(unix)]
+    let _ = map.advise(memmap2::Advice::Random);
     let files = entries
         .into_par_iter()
         .map(|(path, stamp, head, body)| {
             let raw: RawFile = postcard::from_bytes(&bytes[head])?;
-            let body = Body { data: OnceLock::new(), saved: Some((bytes.clone(), body)) };
+            let body = Body { data: OnceLock::new(), saved: Some((map.clone() as Bytes, body)) };
             Ok((path, (stamp, Arc::new(raw), Arc::new(body))))
         })
         .collect::<Result<HashMap<_, _>>>()?;
+    // The heads are decoded now, so their pages are not needed again.
+    // SAFETY: the map is read-only, so the system reads the pages from the
+    // file again if they are used.
+    #[cfg(unix)]
+    let _ = unsafe { map.unchecked_advise_range(memmap2::UncheckedAdvice::DontNeed, 0, head_at) };
     Ok(Reuse { files, inflections: header.inflections, lists: header.lists, saved: true })
 }
 
@@ -215,8 +262,10 @@ pub fn write(path: &Path, index: &Index) -> Result<()> {
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&(header.len() as u64).to_le_bytes());
     out.extend_from_slice(&header);
-    for (h, b) in &blobs {
+    for (h, _) in &blobs {
         out.extend_from_slice(h);
+    }
+    for (_, b) in &blobs {
         out.extend_from_slice(b);
     }
     if let Some(dir) = path.parent() {

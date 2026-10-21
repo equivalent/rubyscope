@@ -63,6 +63,11 @@ enum Command {
     },
 }
 
+// jemalloc builds and loads the index faster than the system allocator.
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let opts = BuildOptions { gems: !cli.no_gems, stdlib: !cli.no_stdlib };

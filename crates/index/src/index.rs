@@ -206,6 +206,13 @@ impl FileEntry {
         &self.body.get().refs
     }
 
+    /// True when the references and local variables of the file are
+    /// decoded and kept in memory. Most files keep them as bytes until a
+    /// click needs them.
+    pub fn body_is_decoded(&self) -> bool {
+        self.body.is_decoded()
+    }
+
     /// The local variable assignments in the file.
     pub fn locals(&self) -> &[LocalAssign] {
         &self.body.get().locals
