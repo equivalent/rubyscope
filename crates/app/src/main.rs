@@ -29,6 +29,11 @@ fn parse_file_arg(arg: &str) -> (PathBuf, Option<u32>) {
     (PathBuf::from(arg), None)
 }
 
+// jemalloc builds and loads the index faster than the system allocator.
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 fn main() -> eframe::Result {
     external::use_login_shell_path();
     let args: Vec<String> = std::env::args().skip(1).collect();

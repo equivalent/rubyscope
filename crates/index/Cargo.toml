@@ -9,6 +9,7 @@ build = "build.rs"
 anyhow.workspace = true
 postcard.workspace = true
 ignore.workspace = true
+memmap2.workspace = true
 rayon.workspace = true
 regex.workspace = true
 ruby-prism.workspace = true

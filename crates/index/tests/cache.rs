@@ -107,3 +107,55 @@ fn a_bad_saved_index_is_not_used() {
     std::fs::write(&saved, b"not an index").unwrap();
     assert_eq!(Index::load(&project, &OPTS, &cache).unwrap().stats.reused, 0);
 }
+
+/// The paths of the files whose references are decoded and kept in memory.
+fn decoded(index: &Index) -> Vec<String> {
+    (0..index.files.len() as u32)
+        .filter(|&f| index.files[f as usize].body_is_decoded())
+        .map(|f| index.display_path(f))
+        .collect()
+}
+
+/// A file is decoded only when a click or "find usages" needs its own
+/// references. The others stay as bytes, after a new build and after a
+/// load of the saved index.
+#[test]
+fn references_stay_as_bytes_until_a_file_needs_them() {
+    let (project, cache) = setup();
+    write(&project, "app/models/customer.rb", "class Customer\n  def name; end\nend\n");
+    let built = Index::load(&project, &OPTS, &cache).unwrap();
+    built.save(&cache).unwrap();
+    let loaded = Index::load(&project, &OPTS, &cache).unwrap();
+    assert_eq!(loaded.stats.reused, 3);
+
+    for index in [&built, &loaded] {
+        assert_eq!(decoded(index), Vec::<String>::new());
+        assert_eq!(click(index, "app/services/billing.rb", "pay!"), "Invoice#pay! @ app/models/invoice.rb:2");
+        assert_eq!(decoded(index), ["app/services/billing.rb"]);
+
+        let invoice = index.file_id(Path::new("app/models/invoice.rb")).unwrap();
+        let usages = index.usages(&index.symbol_at(invoice, 20).unwrap());
+        assert_eq!(usages.len(), 1);
+        assert_eq!(index.display_path(usages[0].file), "app/services/billing.rb");
+        // The list of names reads every file, but keeps only the file of
+        // the symbol and the file with the usage. `customer.rb` stays bytes.
+        assert_eq!(decoded(index), ["app/models/invoice.rb", "app/services/billing.rb"]);
+    }
+}
+
+/// A saved index that is mapped stays readable after it is saved again,
+/// because a save writes a new file and renames it.
+#[test]
+fn an_index_from_the_saved_file_can_be_saved_again() {
+    let (project, cache) = setup();
+    Index::load(&project, &OPTS, &cache).unwrap().save(&cache).unwrap();
+    let loaded = Index::load(&project, &OPTS, &cache).unwrap();
+    write(&project, "app/models/invoice.rb", "class Invoice\n\n  def pay!; end\nend\n");
+    let changed = loaded.rebuild(&OPTS).unwrap();
+    changed.save(&cache).unwrap();
+    // The first index still reads its bodies from the old, mapped file.
+    assert_eq!(click(&loaded, "app/services/billing.rb", "pay!"), "Invoice#pay! @ app/models/invoice.rb:2");
+    let again = Index::load(&project, &OPTS, &cache).unwrap();
+    assert_eq!(again.stats.reused, again.stats.files);
+    assert_eq!(click(&again, "app/services/billing.rb", "pay!"), "Invoice#pay! @ app/models/invoice.rb:3");
+}
