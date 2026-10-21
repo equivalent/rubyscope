@@ -102,16 +102,51 @@ pub struct Hierarchy {
     pub descendants: Vec<String>,
 }
 
+/// True when `offset` is on the last segment of a written constant path:
+/// `Invoice` in `Billing::Invoice`.
+fn on_last_segment(name_span: Span, path: &ConstPath, offset: u32) -> bool {
+    let last = path.segments.last().map_or(0, |s| s.len() as u32);
+    name_span.contains(offset) && offset + last >= name_span.end
+}
+
 impl Index {
     /// The symbol at a position: what a click there goes to, or the
     /// definition the cursor is on.
     pub fn symbol_at(&self, file: FileId, offset: u32) -> Option<Symbol> {
-        let res = self.definition_at(file, offset)?;
+        let Some(res) = self.definition_at(file, offset) else {
+            // The name in `PREFIX = "x"` is not a reference.
+            return self.declaration_at(file, offset);
+        };
         let t = res.targets.first()?;
         self.symbol_of_loc(t.loc).or_else(|| {
             // A constant target.
             self.consts.contains_key(&t.label).then(|| Symbol::Const { name: t.label.clone() })
         })
+    }
+
+    /// The constant that a definition names at an offset: `Invoice` in
+    /// `class Billing::Invoice`, or `PREFIX` in `PREFIX = "x"`. `Billing`
+    /// there is a reference to another constant, not this definition.
+    pub fn declaration_at(&self, file: FileId, offset: u32) -> Option<Symbol> {
+        let f = &self.files[file as usize];
+        if let Some(i) = f.raw.scopes.iter().position(|s| {
+            matches!(s.kind, ScopeKind::Class | ScopeKind::Module) && on_last_segment(s.name_span, &s.path, offset)
+        }) {
+            return Some(Symbol::Const { name: f.scope_names[i].clone() });
+        }
+        let w = f.raw.const_writes.iter().find(|w| on_last_segment(w.name_span, &w.path, offset))?;
+        let (name, _) = self
+            .consts
+            .iter()
+            .find(|(_, defs)| defs.iter().any(|d| d.loc.file == file && d.loc.name_span == w.name_span))?;
+        Some(Symbol::Const { name: name.clone() })
+    }
+
+    /// The name of a constant write at an offset, for underlining. A class
+    /// or module name is a reference already.
+    pub(crate) fn const_write_name_at(&self, file: FileId, offset: u32) -> Option<Span> {
+        let f = &self.files[file as usize];
+        f.raw.const_writes.iter().find(|w| on_last_segment(w.name_span, &w.path, offset)).map(|w| w.name_span)
     }
 
     fn symbol_of_loc(&self, loc: Loc) -> Option<Symbol> {
@@ -149,8 +184,12 @@ impl Index {
                 let r = &self.files[*file as usize].refs()[*i as usize];
                 let conf = match (&r.kind, sym) {
                     (RefKind::Const(path), Symbol::Const { name: full }) => {
+                        // The name in `class Invoice` defines the class; it is not a usage.
+                        let is_def = defs.iter().any(|d| {
+                            d.file == *file && d.name_span.contains(r.span.start) && d.name_span.end == r.span.end
+                        });
                         let chain = self.chain(*file, r.scope);
-                        (self.lookup_const(path, &chain).as_deref() == Some(full.as_str()))
+                        (!is_def && self.lookup_const(path, &chain).as_deref() == Some(full.as_str()))
                             .then_some(Confidence::Exact)?
                     }
                     _ if is_const && !matches!(r.kind, RefKind::Call { .. }) => return None,

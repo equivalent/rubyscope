@@ -169,6 +169,27 @@ fn ctrl_click_goes_to_definitions_and_back_returns() {
 }
 
 #[test]
+fn ctrl_click_on_a_class_definition_lists_its_usages() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    // `Invoice` in `class Invoice < ApplicationRecord`, line 2.
+    let p = point(&h, 2, 8);
+    ctrl_click(&mut h, p);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "app/models/invoice.rb", "the click stays in the file");
+    match &h.state().bottom {
+        Some(Bottom::Results { rows, title }) => {
+            assert_eq!(title, "Usages of Invoice (1)");
+            assert_eq!(rows[0].rel, "app/services/billing.rb");
+            assert_eq!(rows[0].line, 2);
+        }
+        _ => panic!("no results panel"),
+    }
+    shot(&mut h, "04b-ctrl-click-class-definition");
+}
+
+#[test]
 fn hover_shows_the_docs() {
     let root = fixture();
     let mut h = harness(&root);

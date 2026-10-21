@@ -113,7 +113,9 @@ rubyscope                                            # see below
 3. Hold Ctrl. The names that you can click get an underline. Click one to
    go to its definition. When there are several definitions, rubyscope
    shows a list. When a class is opened in many files, it goes to the main
-   file and tells you how many files there are.
+   file and tells you how many files there are. A click on the name where
+   a class, module or constant is defined (`class Order`, `PREFIX = "x"`)
+   lists the places that use it.
 4. Go back with the mouse back button or the ← button in the top bar. Go
    forward with the mouse forward button or the → button.
 5. Right-click a name and choose "Find usages". The results panel opens at
@@ -144,6 +146,7 @@ rubyscope                                            # see below
 | Mouse | What it does |
 |---|---|
 | Ctrl+click | Go to the definition (a list when there are several) |
+| Ctrl+click on the name in a class, module or constant definition (`class Order`, `PREFIX = "x"`) | List the usages of that class, module or constant in the results panel |
 | Ctrl+click on the name of a controller action | Go to its view (template or Phlex view) |
 | Click the link above the code of a view | Go to its controller action or mailer method |
 | Rest the pointer on a name | Popup with signature, docs, location, type |

@@ -313,3 +313,59 @@ fn private_def_keeps_the_method() {
     let m = idx.methods.iter().find(|m| m.name == "secret").unwrap();
     assert_eq!(m.visibility, rubyscope_index::model::Visibility::Private);
 }
+
+impl Project {
+    /// The usages of the definition named at `needle`, as `path:line`.
+    fn declaration_usages(&self, path: &str, needle: &str, skip: usize) -> Option<Vec<String>> {
+        let (_, code) = self.files.iter().find(|(p, _)| *p == path).expect("file");
+        let offset = code.find(needle).unwrap_or_else(|| panic!("{needle} not in {path}")) + skip;
+        let file = self.index.file_id(std::path::Path::new(path)).expect("file id");
+        let sym = self.index.declaration_at(file, offset as u32)?;
+        let usages = self.index.usages(&sym);
+        Some(
+            usages
+                .iter()
+                .map(|u| {
+                    let line = self.index.files[u.file as usize].raw.line_of(u.span.start) + 1;
+                    format!("{}:{line}", self.index.display_path(u.file))
+                })
+                .collect(),
+        )
+    }
+}
+
+#[test]
+fn the_name_of_a_definition_lists_its_usages() {
+    let p = Project::new(&[
+        ("app/models/order.rb", "class Order\n  TOPIC_PREFIX = \"ai:\"\n\n  def topic = \"#{TOPIC_PREFIX}x\"\nend\n"),
+        ("app/models/shop.rb", "module Shop\n  class Cart\n  end\nend\nclass Shop::Basket\nend\n"),
+        (
+            "app/services/checkout.rb",
+            "class Checkout\n  def run\n    Order::TOPIC_PREFIX\n    Shop::Cart.new\n    Order.new\n  end\nend\n",
+        ),
+    ]);
+    // A constant: its own file and other files.
+    assert_eq!(
+        p.declaration_usages("app/models/order.rb", "TOPIC_PREFIX", 3),
+        Some(vec!["app/models/order.rb:4".to_string(), "app/services/checkout.rb:3".to_string()])
+    );
+    // A class and a module. The definition line itself is not a usage.
+    assert_eq!(
+        p.declaration_usages("app/models/order.rb", "Order", 0),
+        Some(vec!["app/services/checkout.rb:3".to_string(), "app/services/checkout.rb:5".to_string()])
+    );
+    assert_eq!(
+        p.declaration_usages("app/models/shop.rb", "Shop", 1),
+        Some(vec!["app/models/shop.rb:5".to_string(), "app/services/checkout.rb:4".to_string()])
+    );
+    assert_eq!(
+        p.declaration_usages("app/models/shop.rb", "Cart", 0),
+        Some(vec!["app/services/checkout.rb:4".to_string()])
+    );
+    // `Shop` in `class Shop::Basket` is a reference, so a click goes to Shop.
+    assert_eq!(p.declaration_usages("app/models/shop.rb", "Shop::Basket", 1), None);
+    assert_eq!(p.first("app/models/shop.rb", "Shop::Basket", 1), "Shop @ app/models/shop.rb:1");
+    assert_eq!(p.declaration_usages("app/models/shop.rb", "Basket", 0), Some(vec![]));
+    // A name inside a method body is not a definition.
+    assert_eq!(p.declaration_usages("app/services/checkout.rb", "Order.new", 0), None);
+}

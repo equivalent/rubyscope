@@ -58,6 +58,9 @@ impl Index {
         if let Some(r) = self.ref_at(file, offset) {
             return Some(r.span);
         }
+        if let Some(name) = self.const_write_name_at(file, offset) {
+            return Some(name);
+        }
         self.methods.iter().find(|m| m.loc.file == file && m.loc.name_span.contains(offset)).map(|m| m.loc.name_span)
     }
 

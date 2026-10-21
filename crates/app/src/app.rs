@@ -478,6 +478,18 @@ impl App {
         }
     }
 
+    /// A Ctrl+click. On the name in a class, module or constant definition
+    /// it lists the usages, as there is nowhere else to go. Elsewhere it
+    /// goes to the definition.
+    fn click_at_cursor(&mut self, pos: Pos2) {
+        let (Some(index), Some(file)) = (self.index.clone(), self.current_file_id()) else { return };
+        let Some(cursor) = self.current().and_then(|t| t.cursor) else { return };
+        match index.declaration_at(file, cursor) {
+            Some(sym) => self.show_usages(&index, &sym, "Usages of"),
+            None => self.definition_at_cursor(false, pos),
+        }
+    }
+
     fn definition_at_cursor(&mut self, all: bool, pos: Pos2) {
         let (Some(index), Some(file)) = (self.index.clone(), self.current_file_id()) else { return };
         let Some(cursor) = self.current().and_then(|t| t.cursor) else { return };
@@ -1688,7 +1700,7 @@ impl App {
             if let Some(t) = self.tabs.get_mut(self.active) {
                 t.cursor = Some(offset);
             }
-            self.definition_at_cursor(false, pos);
+            self.click_at_cursor(pos);
         }
         if let Some(offset) = events.context {
             let pos = ctx.input(|i| i.pointer.latest_pos()).unwrap_or_default();
