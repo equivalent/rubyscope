@@ -474,9 +474,12 @@ Not done yet, compared with this plan:
   `String` is written in C.
 - **Zeitwerk roots from the probe** are not used: definitions are found by
   reading the code, which covered every project constant.
-- **Memory:** about 710 MB for that app with all gems when it starts from the
-  saved index (1.1 GB before). "Find usages" decodes all references, which
-  adds memory.
+- **Memory:** about 560 MB for that app with all gems, from the saved
+  index or from a new index (before: 685 MB from the saved index and
+  1.2 GB from a new index). The references of each file stay as bytes until
+  a click needs them, also after a new index. The saved index is mapped,
+  not read. The first "find usages" adds about 100 MB (before: about
+  400 MB, because it kept every file's references decoded).
 - **Re-index after a change:** only changed files are parsed, but linking
   runs again for the whole project (about 0.6 s for that app).
 - **macOS** (planned for later).

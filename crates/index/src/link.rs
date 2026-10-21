@@ -363,24 +363,34 @@ impl Index {
     /// it takes a quarter of the link time and only usages need it.
     pub fn refs_by_name(&self) -> &HashMap<String, Vec<(FileId, u32)>> {
         self.refs_by_name.get_or_init(|| {
-            // Decode the saved references of every file first, in parallel.
-            self.files.par_iter().for_each(|f| {
-                f.refs();
-            });
+            // Read the names of every file in parallel. A body that is still
+            // bytes is decoded only for this, and not kept.
+            let per_file: Vec<Vec<(String, u32)>> = self
+                .files
+                .par_iter()
+                .map(|f| {
+                    f.body.with(|b| {
+                        b.refs
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, r)| {
+                                let name = match &r.kind {
+                                    RefKind::Call { name, .. } | RefKind::MethodSymbol { name, .. } => name.as_str(),
+                                    RefKind::Const(path) => {
+                                        path.segments.last().map(String::as_str).unwrap_or_default()
+                                    }
+                                    _ => return None,
+                                };
+                                Some((name.to_string(), i as u32))
+                            })
+                            .collect()
+                    })
+                })
+                .collect();
             let mut out: HashMap<String, Vec<(FileId, u32)>> = HashMap::new();
-            for (file_id, f) in self.files.iter().enumerate() {
-                for (i, r) in f.refs().iter().enumerate() {
-                    let name = match &r.kind {
-                        RefKind::Call { name, .. } | RefKind::MethodSymbol { name, .. } => name.as_str(),
-                        RefKind::Const(path) => path.segments.last().map(String::as_str).unwrap_or_default(),
-                        _ => continue,
-                    };
-                    match out.get_mut(name) {
-                        Some(list) => list.push((file_id as FileId, i as u32)),
-                        None => {
-                            out.insert(name.to_string(), vec![(file_id as FileId, i as u32)]);
-                        }
-                    }
+            for (file_id, names) in per_file.into_iter().enumerate() {
+                for (name, i) in names {
+                    out.entry(name).or_default().push((file_id as FileId, i));
                 }
             }
             out

@@ -317,7 +317,9 @@ definitions, each with how sure it is.
 
 The saved index is in `~/.cache/rubyscope/<project>-<hash>.bin`, or in
 `$XDG_CACHE_HOME/rubyscope/` when `XDG_CACHE_HOME` is set. For a large
-Rails app with its gems the file is about 125 MB.
+Rails app with its gems the file is about 125 MB. rubyscope maps the file
+into memory and does not read all of it. The references of a file are read
+from it only when a click or "find usages" needs them.
 
 At the next start rubyscope parses only the files whose size or change
 time is different. Then it links everything again. For a large app (about
@@ -350,8 +352,9 @@ saved index.
   the index while the window is open. Use "Index the project again".
 - After a file changes, linking runs again for the whole project (about
   0.6 s for a large app).
-- A large app with all its gems uses about 700 MB of memory. "Find usages"
-  decodes all references, and this adds memory.
+- A large app with all its gems uses about 560 MB of memory, the same
+  after a new index as with the saved index. The first "find usages"
+  adds about 100 MB for the list of names.
 
 ## Files that rubyscope writes
 
