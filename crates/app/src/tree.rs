@@ -1,6 +1,7 @@
 //! The file tree in the side bar.
 
 use std::collections::{BTreeMap, HashSet};
+use std::path::Path;
 
 use eframe::egui::{self, RichText};
 
@@ -45,12 +46,13 @@ impl FileTree {
         self.reveal = Some(rel.to_string());
     }
 
-    /// Draws the tree. Returns the file that was clicked.
-    pub fn ui(&mut self, ui: &mut egui::Ui, theme: &Theme, current: Option<&str>) -> Option<String> {
+    /// Draws the tree. Returns the file that was clicked. `project` is the
+    /// project folder, for "Copy full path" in the right-click menu.
+    pub fn ui(&mut self, ui: &mut egui::Ui, theme: &Theme, current: Option<&str>, project: &Path) -> Option<String> {
         let mut clicked = None;
         let FileTree { root, open, reveal } = self;
         egui::ScrollArea::both().auto_shrink([false, false]).id_salt("tree").show(ui, |ui| {
-            dir_ui(ui, theme, root, "", 0, open, reveal, current, &mut clicked);
+            dir_ui(ui, theme, root, "", 0, open, reveal, current, project, &mut clicked);
         });
         clicked
     }
@@ -73,6 +75,7 @@ fn dir_ui(
     open: &mut HashSet<String>,
     reveal: &mut Option<String>,
     current: Option<&str>,
+    project: &Path,
     clicked: &mut Option<String>,
 ) {
     let indent = depth as f32 * 14.0;
@@ -97,7 +100,7 @@ fn dir_ui(
             }
         }
         if is_open {
-            dir_ui(ui, theme, sub, &path, depth + 1, open, reveal, current, clicked);
+            dir_ui(ui, theme, sub, &path, depth + 1, open, reveal, current, project, clicked);
         }
     }
     for name in &dir.files {
@@ -122,9 +125,21 @@ fn dir_ui(
             resp.scroll_to_me(Some(egui::Align::Center));
             *reveal = None;
         }
+        resp.context_menu(|ui| copy_path_buttons(ui, &path, &project.join(&path)));
         if resp.clicked() {
             *clicked = Some(path);
         }
+    }
+}
+
+/// Buttons for the right-click menu of a file name: copy its path in the
+/// project, or its full path on disk.
+pub fn copy_path_buttons(ui: &mut egui::Ui, rel: &str, full: &Path) {
+    if ui.button("Copy path").clicked() {
+        ui.ctx().copy_text(rel.to_string());
+    }
+    if ui.button("Copy full path").clicked() {
+        ui.ctx().copy_text(full.display().to_string());
     }
 }
 

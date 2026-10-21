@@ -628,3 +628,101 @@ fn ctrl_q_closes_the_project_then_quits() {
     h.step();
     assert!(asked_to_close(&h));
 }
+
+/// The text that the last frame copied.
+fn copied(h: &Harness<'static, App>) -> Vec<String> {
+    h.output()
+        .platform_output
+        .commands
+        .iter()
+        .filter_map(|c| match c {
+            eframe::egui::OutputCommand::CopyText(t) => Some(t.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Right-clicks the name of a tab (`tab`) or of a file in the side bar.
+fn right_click_name(h: &mut Harness<'static, App>, name: &str, tab: bool) {
+    let nodes: Vec<_> = h.get_all_by_label(name).collect();
+    let node = if tab {
+        nodes.iter().max_by(|a, b| a.rect().min.x.total_cmp(&b.rect().min.x))
+    } else {
+        nodes.iter().min_by(|a, b| a.rect().min.x.total_cmp(&b.rect().min.x))
+    };
+    node.expect("the name").click_secondary();
+    let _ = h.run_ok();
+}
+
+#[test]
+fn copy_paths_from_the_tree_and_the_tabs() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    let full = root.join("app/models/invoice.rb").display().to_string();
+
+    right_click_name(&mut h, "invoice.rb", false);
+    shot(&mut h, "30-tree-menu");
+    h.get_by_label("Copy path").click();
+    h.step();
+    assert_eq!(copied(&h), vec!["app/models/invoice.rb".to_string()]);
+
+    right_click_name(&mut h, "invoice.rb", true);
+    shot(&mut h, "31-tab-menu");
+    h.get_by_label("Copy full path").click();
+    h.step();
+    assert_eq!(copied(&h), vec![full]);
+}
+
+#[test]
+fn close_tabs_from_the_tab_menu() {
+    let root = fixture();
+    let mut h = harness(&root);
+    let names = ["entity.rb", "invoice.rb", "billing.rb", "application_record.rb"];
+    for rel in
+        ["app/models/entity.rb", "app/models/invoice.rb", "app/services/billing.rb", "app/models/application_record.rb"]
+    {
+        open(&mut h, &root, rel);
+    }
+    let tabs = |h: &Harness<'static, App>| -> Vec<String> {
+        h.state().tabs.iter().map(|t| t.path.file_name().unwrap().to_string_lossy().to_string()).collect()
+    };
+    assert_eq!(tabs(&h), names);
+
+    // Close the tabs to the right of invoice.rb: the active tab
+    // (application_record.rb) closes, so invoice.rb becomes active.
+    right_click_name(&mut h, "invoice.rb", true);
+    h.get_by_label("Close tabs to the right").click();
+    let _ = h.run_ok();
+    assert_eq!(tabs(&h), ["entity.rb", "invoice.rb"]);
+    assert_eq!(current_rel(&h), "app/models/invoice.rb");
+
+    // Close the tabs to the left of invoice.rb.
+    right_click_name(&mut h, "invoice.rb", true);
+    h.get_by_label("Close tabs to the left").click();
+    let _ = h.run_ok();
+    assert_eq!(tabs(&h), ["invoice.rb"]);
+
+    open(&mut h, &root, "app/models/entity.rb");
+    right_click_name(&mut h, "invoice.rb", true);
+    h.get_by_label("Close").click();
+    let _ = h.run_ok();
+    assert_eq!(tabs(&h), ["entity.rb"]);
+    assert_eq!(current_rel(&h), "app/models/entity.rb");
+
+    open(&mut h, &root, "app/models/invoice.rb");
+    right_click_name(&mut h, "entity.rb", true);
+    h.get_by_label("Close all tabs").click();
+    let _ = h.run_ok();
+    assert!(h.state().tabs.is_empty());
+}
+
+#[test]
+fn tab_close_button_sits_next_to_the_name() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    let name = h.get_all_by_label("invoice.rb").map(|n| n.rect()).max_by(|a, b| a.min.x.total_cmp(&b.min.x)).unwrap();
+    let close = h.get_by_label("✕").rect();
+    assert!(close.min.x - name.max.x <= 2.0, "gap {}", close.min.x - name.max.x);
+}

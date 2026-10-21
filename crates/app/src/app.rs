@@ -13,7 +13,7 @@ use crate::external;
 use crate::keys::{self, Action, Keymap};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
 use crate::theme::Theme;
-use crate::tree::FileTree;
+use crate::tree::{self, FileTree};
 use crate::view::{self, Clickable, OpenFile};
 use crate::worker::{self, Msg, Worker};
 
@@ -60,6 +60,15 @@ struct HoverPopup {
     offset: u32,
     pos: Pos2,
     data: Option<Hover>,
+}
+
+/// Which tabs a tab's right-click menu closes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TabClose {
+    This,
+    Left,
+    Right,
+    All,
 }
 
 pub struct App {
@@ -721,13 +730,7 @@ impl App {
                     }
                 }
             }
-            Action::CloseTab => {
-                if !self.tabs.is_empty() {
-                    self.tabs.remove(self.active);
-                    self.active = self.active.min(self.tabs.len().saturating_sub(1));
-                    self.save_session();
-                }
-            }
+            Action::CloseTab => self.close_tabs(self.active, TabClose::This),
             Action::NextTab => {
                 if !self.tabs.is_empty() {
                     self.active = (self.active + 1) % self.tabs.len();
@@ -1048,7 +1051,8 @@ impl App {
                 match self.sidebar_tab {
                     SidebarTab::Files => {
                         let current = self.current().map(|t| t.rel.clone());
-                        if let Some(rel) = self.tree.ui(ui, &theme, current.as_deref())
+                        let project = self.root.clone().unwrap_or_default();
+                        if let Some(rel) = self.tree.ui(ui, &theme, current.as_deref(), &project)
                             && let Some(root) = self.root.clone()
                         {
                             self.open_path(&root.join(rel), None, None, true);
@@ -1229,24 +1233,65 @@ impl App {
                     let name = t.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                     let active = i == self.active;
                     let text = RichText::new(&name).color(if active { theme.fg_bright } else { theme.fg_dim });
-                    let r = ui.selectable_label(active, text).on_hover_text(&t.rel);
-                    if r.clicked() {
-                        self.active = i;
-                    }
-                    if r.middle_clicked() {
-                        close = Some(i);
-                    }
-                    if active && ui.small_button("✕").clicked() {
-                        close = Some(i);
-                    }
+                    // The name and its ✕ sit close together, as one tab.
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = 1.0;
+                        let r = ui.selectable_label(active, text).on_hover_text(&t.rel);
+                        if r.clicked() {
+                            self.active = i;
+                        }
+                        if r.middle_clicked() {
+                            close = Some((i, TabClose::This));
+                        }
+                        r.context_menu(|ui| {
+                            for (what, label) in [
+                                (TabClose::This, "Close"),
+                                (TabClose::Left, "Close tabs to the left"),
+                                (TabClose::Right, "Close tabs to the right"),
+                                (TabClose::All, "Close all tabs"),
+                            ] {
+                                if ui.button(label).clicked() {
+                                    close = Some((i, what));
+                                }
+                            }
+                            ui.separator();
+                            tree::copy_path_buttons(ui, &t.rel, &t.path);
+                        });
+                        if active && ui.small_button("✕").clicked() {
+                            close = Some((i, TabClose::This));
+                        }
+                    });
                 }
             });
         });
-        if let Some(i) = close {
-            self.tabs.remove(i);
-            self.active = self.active.min(self.tabs.len().saturating_sub(1));
-            self.save_session();
+        if let Some((i, what)) = close {
+            self.close_tabs(i, what);
         }
+    }
+
+    /// Closes tab `i`, or the tabs to its left or right, or all tabs. The
+    /// active tab stays active when it is still open; else tab `i` (or the
+    /// tab next to it) becomes active.
+    pub(crate) fn close_tabs(&mut self, i: usize, what: TabClose) {
+        if i >= self.tabs.len() {
+            return;
+        }
+        let keep = |j: usize| match what {
+            TabClose::This => j != i,
+            TabClose::Left => j >= i,
+            TabClose::Right => j <= i,
+            TabClose::All => false,
+        };
+        let active = self.active;
+        let new_active =
+            if keep(active) { (0..active).filter(|&j| keep(j)).count() } else { (0..i).filter(|&j| keep(j)).count() };
+        let mut j = 0;
+        self.tabs.retain(|_| {
+            j += 1;
+            keep(j - 1)
+        });
+        self.active = new_active.min(self.tabs.len().saturating_sub(1));
+        self.save_session();
     }
 
     /// The bar above the code of a view file: links to the controller
@@ -1619,6 +1664,10 @@ impl App {
                 return;
             }
             self.tab_bar(ui);
+            if self.tabs.is_empty() {
+                // The tab bar closed the last tab.
+                return;
+            }
             self.view_action_bar(ui);
             self.find_bar(ui);
             let index = self.index.clone();
