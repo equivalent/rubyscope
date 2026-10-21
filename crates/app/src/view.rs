@@ -21,7 +21,10 @@ const BLAME_FONT: f32 = 0.92;
 /// The most characters of an author name in the blame column.
 const BLAME_NAME_CHARS: usize = 16;
 /// The mouse wheel scrolls this many times faster than egui's default.
-const WHEEL_SPEED: f32 = 3.0;
+const WHEEL_SPEED: f32 = 8.0;
+/// egui's points per wheel line (`InputOptions::line_scroll_speed`). A
+/// touchpad sends points, so this many points count as one wheel step.
+const POINTS_PER_STEP: f32 = 40.0;
 /// Lines an arrow key (or j / k) scrolls.
 const KEY_LINES: f32 = 3.0;
 /// Columns a left or right arrow scrolls.
@@ -74,6 +77,8 @@ pub struct OpenFile {
     pending_g: Option<f64>,
     /// Digits typed before `g`: `500g` goes to line 500.
     count: Option<u32>,
+    /// Wheel steps with Shift held that did not make a full page yet.
+    shift_wheel: f32,
 }
 
 impl OpenFile {
@@ -113,6 +118,7 @@ impl OpenFile {
             view_size: Vec2::ZERO,
             pending_g: None,
             count: None,
+            shift_wheel: 0.0,
         }
     }
 
@@ -283,7 +289,11 @@ pub fn code_view(
         .auto_shrink([false, false])
         .id_salt(("code", &file.rel))
         .wheel_scroll_multiplier(Vec2::splat(WHEEL_SPEED));
-    if let Some(to) = scroll_keys(ui, file, row_h, char_w) {
+    let mut to = scroll_keys(ui, file, row_h, char_w);
+    if let Some(y) = shift_wheel(ui, file, row_h, to.unwrap_or(file.scroll).y) {
+        to = Some(Vec2::new(to.unwrap_or(file.scroll).x, y));
+    }
+    if let Some(to) = to {
         area = area.scroll_offset(to);
     }
     if let Some(line) = file.scroll_to_line.take() {
@@ -616,6 +626,44 @@ fn scroll_keys(ui: &egui::Ui, file: &mut OpenFile, row_h: f32, char_w: f32) -> O
         to = Some(Vec2::new(x.clamp(0.0, file.scroll_max.x), y.clamp(0.0, file.scroll_max.y)));
     }
     to
+}
+
+/// Shift and the mouse wheel scroll one page per wheel step, as Page Down
+/// and Page Up do. egui would scroll sideways, so this takes the wheel
+/// away from egui while Shift is held over the code. `y` is the scroll
+/// offset so far. Returns the new one.
+fn shift_wheel(ui: &egui::Ui, file: &mut OpenFile, row_h: f32, y: f32) -> Option<f32> {
+    let shift = ui.input(|i| i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.command);
+    if !shift || !ui.rect_contains_pointer(ui.available_rect_before_wrap()) {
+        file.shift_wheel = 0.0;
+        return None;
+    }
+    let steps: f32 = ui.input(|i| {
+        i.events
+            .iter()
+            .filter_map(|e| match e {
+                egui::Event::MouseWheel { unit, delta, .. } => {
+                    // With Shift, macOS sends the wheel as a sideways scroll.
+                    let d = if delta.y != 0.0 { delta.y } else { delta.x };
+                    Some(match unit {
+                        egui::MouseWheelUnit::Point => d / POINTS_PER_STEP,
+                        egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => d,
+                    })
+                }
+                _ => None,
+            })
+            .sum()
+    });
+    ui.ctx().input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
+    file.shift_wheel += steps;
+    let pages = file.shift_wheel.trunc();
+    if pages == 0.0 {
+        return None;
+    }
+    file.shift_wheel -= pages;
+    let page = (file.view_size.y - 2.0 * row_h).max(row_h);
+    // The wheel turned down gives a negative delta.
+    Some((y - pages * page).clamp(0.0, file.scroll_max.y))
 }
 
 fn digit(key: egui::Key) -> Option<u32> {

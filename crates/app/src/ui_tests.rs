@@ -726,3 +726,58 @@ fn tab_close_button_sits_next_to_the_name() {
     let close = h.get_by_label("✕").rect();
     assert!(close.min.x - name.max.x <= 2.0, "gap {}", close.min.x - name.max.x);
 }
+
+/// Turns the mouse wheel `steps` steps over the code (down when negative).
+fn wheel(h: &mut Harness<'static, App>, steps: f32, modifiers: Modifiers) {
+    let pos = Pos2::new(700.0, 400.0);
+    h.event(Event::ModifiersChanged(modifiers));
+    h.event(Event::PointerMoved(pos));
+    let _ = h.run_ok();
+    h.event(Event::MouseWheel {
+        unit: eframe::egui::MouseWheelUnit::Line,
+        delta: Vec2::new(0.0, steps),
+        phase: eframe::egui::TouchPhase::Move,
+        source: eframe::egui::MouseWheelSource::Wheel,
+        modifiers,
+    });
+    let _ = h.run_ok();
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    let _ = h.run_ok();
+}
+
+#[test]
+fn wheel_scrolls_fast_and_shift_wheel_scrolls_a_page() {
+    let root = fixture();
+    let long: String = (1..=400).map(|n| format!("# line {n}\n")).collect();
+    std::fs::write(root.join("app/models/long.rb"), long).unwrap();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/long.rb");
+    let t = |h: &Harness<'static, App>| {
+        let t = h.state().current().unwrap();
+        (t.scroll, t.layout.unwrap().1)
+    };
+
+    // One wheel step scrolls more than ten lines.
+    wheel(&mut h, -1.0, Modifiers::NONE);
+    settle(&mut h);
+    let (scroll, row_h) = t(&h);
+    assert!(scroll.y > 10.0 * row_h, "{} for rows of {row_h}", scroll.y);
+
+    // With Shift, one step scrolls a page down, not sideways.
+    press(&mut h, Modifiers::NONE, Key::Home);
+    let _ = h.run_ok();
+    press(&mut h, Modifiers::NONE, Key::PageDown);
+    let _ = h.run_ok();
+    let page = t(&h).0.y;
+    press(&mut h, Modifiers::NONE, Key::Home);
+    let _ = h.run_ok();
+    wheel(&mut h, -1.0, Modifiers::SHIFT);
+    settle(&mut h);
+    assert_eq!(t(&h).0, Vec2::new(0.0, page));
+    wheel(&mut h, -2.0, Modifiers::SHIFT);
+    settle(&mut h);
+    assert_eq!(t(&h).0.y, 3.0 * page);
+    wheel(&mut h, 1.0, Modifiers::SHIFT);
+    settle(&mut h);
+    assert_eq!(t(&h).0.y, 2.0 * page);
+}
