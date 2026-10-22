@@ -12,6 +12,8 @@ mod git;
 mod highlight;
 mod keys;
 mod picker;
+#[cfg(test)]
+mod shots;
 mod theme;
 mod tree;
 #[cfg(test)]

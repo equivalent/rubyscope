@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docs: how to use rubyscope, mouse and keys</title>
+  <meta name="description" content="How to install and use rubyscope: open a project, go to definitions, find usages, git blame, every mouse action and keyboard shortcut, and how to change the keys.">
+  <link rel="icon" href="../img/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="../img/icon-32.png" sizes="32x32">
+  <link rel="preload" href="../fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../img/icon.svg" alt="" width="30" height="30">rubyscope</a>
+      <nav class="site-nav" aria-label="Main">
+        <a class="wide" href="../#features">Features</a>
+        <a href="../#install">Install</a>
+        <a href="./" aria-current="page">Docs</a>
+        <a href="https://github.com/equivalent/rubyscope">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap docs">
+    <nav class="toc" aria-label="On this page">
+      <p>On this page</p>
+      <ol>
+        <li><a href="#install">Install</a></li>
+        <li><a href="#start">Open a project</a></li>
+        <li><a href="#first-steps">First steps</a></li>
+        <li><a href="#window">The window</a></li>
+        <li><a href="#mouse">Mouse</a></li>
+        <li><a href="#keys">Keys</a></li>
+        <li><a href="#scroll">Scroll keys</a></li>
+        <li><a href="#commands">Commands without a key</a></li>
+        <li><a href="#change-keys">Change the keys</a></li>
+        <li><a href="#clicks">What a click understands</a></li>
+        <li><a href="#index">The saved index</a></li>
+        <li><a href="#limits">Limits</a></li>
+        <li><a href="#files">Files rubyscope writes</a></li>
+        <li><a href="#env">Environment variables</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#cli">Command-line tool</a></li>
+      </ol>
+    </nav>
+
+    <main id="main" class="doc">
+      <h1>Using rubyscope</h1>
+      <p class="lede">rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl and click a name to go to its definition. This page lists everything you can do with it.</p>
+
+      <div class="note">
+        <p>On macOS, use <kbd>Cmd</kbd> where this page says <kbd>Ctrl</kbd>. Three keys stay on Ctrl: <kbd>Ctrl</kbd> <kbd>Tab</kbd>, because Cmd+Tab switches apps, and <kbd>Ctrl</kbd> <kbd>D</kbd> and <kbd>Ctrl</kbd> <kbd>U</kbd>, as in Vim.</p>
+      </div>
+
+      <section id="install">
+        <h2>Install</h2>
+        <p>You need Linux or macOS, Rust 1.88 or newer, and clang with libclang. The Prism parser is compiled from C when you build.</p>
+        <h3>Linux</h3>
+<pre><code>git clone https://github.com/equivalent/rubyscope
+cd rubyscope
+bin/install</code></pre>
+        <p>This builds the release binaries and installs <code>rubyscope</code> and <code>rubyscope-cli</code> in <code>~/.local/bin</code>, an app launcher entry and the icon. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>.</p>
+        <h3>macOS</h3>
+<pre><code>bin/install-macos</code></pre>
+        <p>This installs <code>~/Applications/rubyscope.app</code>, which you can open from Spotlight or the Dock, and a link to it in <code>~/.local/bin</code>. An app started from the Dock gets only the system <code>PATH</code>, so rubyscope reads the <code>PATH</code> of your login shell when it starts.</p>
+        <h3>Optional tools</h3>
+        <table>
+          <thead><tr><th scope="col">Tool</th><th scope="col">What it gives</th></tr></thead>
+          <tbody>
+            <tr><td><code>ruby</code></td><td>Gems and the standard library in the index. rubyscope asks mise or rbenv for the Ruby of the project, else it uses the <code>ruby</code> on <code>PATH</code>.</td></tr>
+            <tr><td><code>bundle install</code></td><td>Clicks that go into gem source. Only installed gems are indexed.</td></tr>
+            <tr><td><code>git</code></td><td>Git blame and "Open on GitHub".</td></tr>
+            <tr><td><code>gh</code></td><td>A click on a blame block opens the pull request of the commit, not only the commit.</td></tr>
+            <tr><td><code>fc-match</code></td><td>Linux: the system monospace font. macOS uses Menlo.</td></tr>
+            <tr><td>Omarchy</td><td>Colors from the current Omarchy theme. Without it, the colors are Tokyo Night.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="start">
+        <h2>Open a project</h2>
+<pre><code>rubyscope ~/code/shop                             <span class="c"># open a project folder</span>
+rubyscope ~/code/shop/app/models/order.rb:40      <span class="c"># open a file at line 40</span>
+rubyscope                                         <span class="c"># the current folder, or the start screen</span></code></pre>
+        <ul>
+          <li>With a file and no folder, the project is the nearest parent folder that has <code>.git</code> or a <code>Gemfile</code>.</li>
+          <li>With no arguments, rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your recent projects.</li>
+          <li><kbd>Ctrl</kbd> <kbd>O</kbd> opens the system folder dialog. When a project is already open, the new one opens in a new window.</li>
+          <li>rubyscope remembers the open tabs of each project and opens them again next time.</li>
+        </ul>
+      </section>
+
+      <section id="first-steps">
+        <h2>First steps</h2>
+        <ol>
+          <li>Open a project. The index builds in the background, and the top bar shows "indexing…" and then the number of files. The first index of a large app takes a few seconds. The next start takes about one second.</li>
+          <li>Open a file. Press <kbd>Ctrl</kbd> <kbd>P</kbd> and type part of the path, or click it in the file tree. Press <kbd>Ctrl</kbd> <kbd>T</kbd> to find a class, module, method or constant by name.</li>
+          <li>Hold <kbd>Ctrl</kbd>. The names you can click get an underline. Click one to go to its definition. When there are several, rubyscope shows a list. When a class is opened in many files, it goes to the main file and tells you how many there are.</li>
+          <li>Go back with the mouse back button or the back button in the top bar. The forward button goes forward again.</li>
+          <li>Right-click a name and choose "Find usages". The results panel opens at the bottom. For a method, the "callers" button on a row shows who calls the method around that row.</li>
+          <li>Rest the pointer on a name for half a second. A popup shows the signature, the docs, where it is defined, the type rubyscope found and how sure it is.</li>
+          <li>Press <kbd>Ctrl</kbd> <kbd>B</kbd> to show git blame. Newer commits get a stronger blue. Click a blame line to open the commit, or its pull request, on GitHub.</li>
+          <li>Press <kbd>Ctrl</kbd> <kbd>K</kbd> to see every command.</li>
+        </ol>
+        <figure class="shot">
+          <img src="../img/shots/hover.webp" width="1658" height="960" loading="lazy"
+               alt="The hover popup over order.ship! with the method, its file and line, and its docs.">
+          <figcaption>The hover popup on a method call. "inferred" means rubyscope worked out the type of <code>order</code> from the code around it.</figcaption>
+        </figure>
+      </section>
+
+      <section id="window">
+        <h2>The window</h2>
+        <table>
+          <thead><tr><th scope="col">Part</th><th scope="col">What it has</th></tr></thead>
+          <tbody>
+            <tr><td>Top bar</td><td>Back and forward, the project name, the file path, the breadcrumb, the "Commands" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go there.</td></tr>
+            <tr><td>Side bar</td><td>"Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file.</td></tr>
+            <tr><td>Tabs</td><td>One tab for each open file. Middle-click a tab to close it. Right-click it for more.</td></tr>
+            <tr><td>Action bar</td><td>Only in a view file: a link to its controller action or mailer method, for example <code>OrdersController#show</code>. It does not scroll with the code.</td></tr>
+            <tr><td>Code</td><td>Drag to select text. Double-click selects a word. <kbd>Ctrl</kbd> <kbd>C</kbd> copies.</td></tr>
+            <tr><td>Results panel</td><td>Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers.</td></tr>
+          </tbody>
+        </table>
+        <figure class="shot">
+          <img src="../img/shots/view-from-action.webp" width="1402" height="1036" loading="lazy"
+               alt="A view file with the action bar above the code, linking to OrdersController#show.">
+          <figcaption>The action bar above a view.</figcaption>
+        </figure>
+      </section>
+
+      <section id="mouse">
+        <h2>Mouse</h2>
+        <table>
+          <thead><tr><th scope="col">Mouse</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Ctrl</kbd> + click</td><td>Go to the definition, or a list when there are several.</td></tr>
+            <tr><td class="wrap-ok"><kbd>Ctrl</kbd> + click a name where it is defined, such as <code>class Order</code> or <code>PREFIX = "x"</code></td><td>List the usages of that class, module or constant.</td></tr>
+            <tr><td><kbd>Ctrl</kbd> + click an action name</td><td>Go to its view, a template or a Phlex view.</td></tr>
+            <tr><td>Click the bar above a view</td><td>Go to its controller action or mailer method.</td></tr>
+            <tr><td>Rest the pointer on a name</td><td>A popup with the signature, docs, location and type.</td></tr>
+            <tr><td>Right-click a name</td><td>A menu: go to view or go to controller action, go to definition, all definitions, find usages, type hierarchy, copy name, copy path:line, open in editor, open on GitHub.</td></tr>
+            <tr><td>Right-click a tab or a file</td><td>Copy its path or its full path. On a tab, also close it, the tabs to its left or right, or all tabs.</td></tr>
+            <tr><td>Back and forward buttons</td><td>Go back and forward. The arrows in the top bar do the same.</td></tr>
+            <tr><td>Click a breadcrumb part</td><td>Go to that class or method.</td></tr>
+            <tr><td>Click a blame block</td><td>Open the commit, or its pull request, on GitHub.</td></tr>
+            <tr><td>"callers" in the results</td><td>Who calls that method, one level up.</td></tr>
+            <tr><td>Middle-click a tab</td><td>Close the tab.</td></tr>
+          </tbody>
+        </table>
+        <figure class="shot">
+          <img src="../img/shots/view-menu.webp" width="1402" height="1036" loading="lazy"
+               alt="The right-click menu in a view, with Go to controller action at the top.">
+          <figcaption>The right-click menu in a view starts with "Go to controller action".</figcaption>
+        </figure>
+      </section>
+
+      <section id="keys">
+        <h2>Keys</h2>
+        <table>
+          <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Open a project folder. A new window when a project is open.</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>P</kbd></td><td>Go to file</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>T</kbd></td><td>Go to symbol: a class, module, method or constant</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></td><td>Search in all files of the project. Plain text, case is ignored.</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>F</kbd></td><td>Find in this file. <kbd>Enter</kbd> goes to the next match, <kbd>Shift</kbd> <kbd>Enter</kbd> to the previous one.</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>All commands</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>G</kbd></td><td>Go to line</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>W</kbd></td><td>Close the tab</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Tab</kbd></td><td>Next tab</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Tab</kbd></td><td>Previous tab</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>B</kbd></td><td>Show or hide git blame</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd></td><td>Show or hide the side bar</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Q</kbd></td><td>Close the project and go back to the project list. Press it again to quit.</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close a popup, then the find bar, then the results panel</td></tr>
+          </tbody>
+        </table>
+        <p><kbd>Ctrl</kbd> <kbd>F</kbd> and <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> start with the selected text when it is on one line.</p>
+        <div class="shots">
+          <figure class="shot">
+            <img src="../img/shots/go-to-file.webp" width="1562" height="220" loading="lazy"
+                 alt="The go to file list, filtered by orders show.">
+            <figcaption><kbd>Ctrl</kbd> <kbd>P</kbd>, go to file</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../img/shots/go-to-symbol.webp" width="1562" height="770" loading="lazy"
+                 alt="The go to symbol list, filtered by ship.">
+            <figcaption><kbd>Ctrl</kbd> <kbd>T</kbd>, go to symbol</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="scroll">
+        <h2>Scroll keys</h2>
+        <p>These keys scroll the code when no text field has focus.</p>
+        <table>
+          <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd></td><td>Scroll three lines</td></tr>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Scroll sideways</td></tr>
+            <tr><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>Scroll one page</td></tr>
+            <tr><td><kbd>Space</kbd> or <kbd>Shift</kbd> <kbd>Space</kbd></td><td>One page down or up</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>D</kbd> or <kbd>Ctrl</kbd> <kbd>U</kbd></td><td>Half a page down or up</td></tr>
+            <tr><td><kbd>g</kbd><kbd>g</kbd> or <kbd>Home</kbd></td><td>Go to the top</td></tr>
+            <tr><td><kbd>Shift</kbd> <kbd>G</kbd> or <kbd>End</kbd></td><td>Go to the end</td></tr>
+            <tr><td>A number, then <kbd>g</kbd></td><td>Go to that line. <kbd>5</kbd><kbd>0</kbd><kbd>0</kbd><kbd>g</kbd> goes to line 500.</td></tr>
+            <tr><td><kbd>0</kbd></td><td>Scroll to the left edge</td></tr>
+          </tbody>
+        </table>
+        <p>The mouse wheel scrolls three times faster than usual in egui apps. Hold <kbd>Shift</kbd> to scroll a page at a time.</p>
+      </section>
+
+      <section id="commands">
+        <h2>Commands without a key</h2>
+        <p>These are in the <kbd>Ctrl</kbd> <kbd>K</kbd> list. They have no key, but you can give them one.</p>
+        <table>
+          <thead><tr><th scope="col">Command</th><th scope="col">Name in keys.toml</th></tr></thead>
+          <tbody>
+            <tr><td>Back</td><td><code>back</code></td></tr>
+            <tr><td>Forward</td><td><code>forward</code></td></tr>
+            <tr><td>Find usages of the symbol at the cursor</td><td><code>find_usages</code></td></tr>
+            <tr><td>Go to the view of the action, or the action of the view</td><td><code>go_to_view</code></td></tr>
+            <tr><td>Type hierarchy of the class at the cursor</td><td><code>type_hierarchy</code></td></tr>
+            <tr><td>Outline of this file</td><td><code>file_outline</code></td></tr>
+            <tr><td>Show or hide the results panel</td><td><code>toggle_bottom_panel</code></td></tr>
+            <tr><td>Open in editor at this line</td><td><code>open_in_editor</code></td></tr>
+            <tr><td>Open this line on GitHub</td><td><code>open_on_github</code></td></tr>
+            <tr><td>Copy path:line</td><td><code>copy_path</code></td></tr>
+            <tr><td>Index the project again, parsing every file</td><td><code>reindex</code></td></tr>
+          </tbody>
+        </table>
+        <p>"Open in editor" uses <code>omarchy-launch-editor</code> when it is on <code>PATH</code>. Otherwise it opens nvim in a terminal. On macOS it opens nvim in a new Terminal window. "Open on GitHub" needs an <code>origin</code> remote on github.com and opens the line at the commit of <code>HEAD</code>.</p>
+      </section>
+
+      <section id="change-keys">
+        <h2>Change the keys</h2>
+        <p>Put your keys in <code>~/.config/rubyscope/keys.toml</code>. A key in this file replaces the default key of that command. The other commands keep their defaults. rubyscope reads the file when it starts.</p>
+<pre><code>toggle_blame = "cmd+alt+b"
+find_usages = "alt+u"
+back = "alt+left"
+forward = "alt+right"
+reindex = "f5"</code></pre>
+        <p>A key is modifiers and one key, joined with <code>+</code>. The modifiers are <code>cmd</code>, <code>ctrl</code>, <code>shift</code> and <code>alt</code>. <code>cmd</code> is Cmd on macOS and Ctrl on Linux, so one file works on both. <code>ctrl</code> is always the Ctrl key. The key can be a letter, a digit, <code>esc</code>, <code>tab</code>, <code>enter</code>, <code>space</code>, an arrow (<code>left</code>, <code>right</code>, <code>up</code>, <code>down</code>) or <code>f1</code> to <code>f12</code>.</p>
+        <table>
+          <caption>Names of the commands that have a default key</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Default</th></tr></thead>
+          <tbody>
+            <tr><td><code>open_folder</code></td><td><kbd>Ctrl</kbd> <kbd>O</kbd></td></tr>
+            <tr><td><code>go_to_file</code></td><td><kbd>Ctrl</kbd> <kbd>P</kbd></td></tr>
+            <tr><td><code>go_to_symbol</code></td><td><kbd>Ctrl</kbd> <kbd>T</kbd></td></tr>
+            <tr><td><code>search_project</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></td></tr>
+            <tr><td><code>find_in_file</code></td><td><kbd>Ctrl</kbd> <kbd>F</kbd></td></tr>
+            <tr><td><code>commands</code></td><td><kbd>Ctrl</kbd> <kbd>K</kbd></td></tr>
+            <tr><td><code>go_to_line</code></td><td><kbd>Ctrl</kbd> <kbd>G</kbd></td></tr>
+            <tr><td><code>close_tab</code></td><td><kbd>Ctrl</kbd> <kbd>W</kbd></td></tr>
+            <tr><td><code>next_tab</code></td><td><kbd>Ctrl</kbd> <kbd>Tab</kbd></td></tr>
+            <tr><td><code>prev_tab</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Tab</kbd></td></tr>
+            <tr><td><code>toggle_blame</code></td><td><kbd>Ctrl</kbd> <kbd>B</kbd></td></tr>
+            <tr><td><code>toggle_sidebar</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd></td></tr>
+            <tr><td><code>close_popup</code></td><td><kbd>Esc</kbd></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="clicks">
+        <h2>What a click understands</h2>
+        <ul>
+          <li><strong>Constants.</strong> Ruby's constant lookup through lexical scopes, ancestors and the top level. Compact names (<code>class A::B</code>), constant aliases and Zeitwerk folder namespaces. A click on a namespace lists the classes in it.</li>
+          <li><strong>Methods.</strong> Ruby's lookup order: prepends, the class, includes, the superclass. Class methods, <code>class &lt;&lt; self</code>, <code>extend</code>, <code>module_function</code>, concerns (<code>class_methods do</code>, <code>included do</code>), <code>class_eval</code>, <code>ActiveSupport.on_load</code> and <code>super</code>.</li>
+          <li><strong>Rails DSLs.</strong> Associations, scopes, enums, <code>delegate</code>, <code>class_attribute</code> and <code>mattr_*</code>, <code>attr_*</code>, <code>attribute</code>, <code>store_accessor</code>, attachments, <code>alias_attribute</code>, and columns from <code>db/schema.rb</code>.</li>
+          <li><strong>Symbols that name methods.</strong> <code>before_action :load</code>, <code>validate :check</code>, <code>if: :paid?</code>, <code>send(:x)</code>.</li>
+          <li><strong>Variable types.</strong> <code>Model.find</code>, relations and scopes, associations, block parameters, instance variables, return values, YARD <code>@return</code>, FactoryBot <code>create(:x)</code>, and as a last guess the variable's name. The hover shows how sure each answer is: exact, inferred, guess or name only.</li>
+          <li><strong>Phlex.</strong> Kit calls such as <code>Button(...)</code> and <code>UI::Button(...)</code> go to <code>UI::Button</code>, also from a module that a class with the kit includes.</li>
+          <li><strong>Controllers and views.</strong> <code>OrdersController#edit</code> and <code>app/views/orders/edit.*</code> both ways, variant folders, and <code>Views::Orders::Edit</code>. Mailer methods and their templates the same way.</li>
+          <li><strong>Routes.</strong> Route helpers such as <code>admin_order_path</code> go to the route line. In routes files, <code>resources :x</code> goes to the controller and <code>to: "a#b"</code> to the action.</li>
+          <li><strong>Translations.</strong> <code>t("a.b")</code> and lazy <code>t(".x")</code> in controllers, Phlex and templates go to the locale YAML line, for every locale.</li>
+          <li><strong>Partials.</strong> <code>render "x/y"</code> goes to the partial. In ERB templates, the Ruby inside the tags works like any Ruby.</li>
+          <li><strong>Tests.</strong> RSpec <code>let</code> and <code>subject</code>, <code>described_class</code>, shared examples, methods in <code>describe</code> blocks, FactoryBot factories and traits.</li>
+          <li><strong>Stimulus.</strong> <code>data-controller</code> and <code>data-action</code>, in ERB and in Phlex hashes, go to the controller file and method.</li>
+          <li><strong>Gems.</strong> Gems from <code>Gemfile.lock</code> and the Ruby standard library.</li>
+        </ul>
+        <figure class="shot narrow">
+          <img src="../img/shots/choose.webp" width="982" height="576" loading="lazy"
+               alt="A list titled Choose a definition of ship!, with Order#ship! and GiftCard#ship!.">
+          <figcaption>When the receiver is not known, rubyscope lists every method with that name.</figcaption>
+        </figure>
+      </section>
+
+      <section id="index">
+        <h2>The saved index</h2>
+        <p>rubyscope lists the project files and respects <code>.gitignore</code>. It reads <code>Gemfile.lock</code> and asks the project's Ruby where the gems and the standard library are. It parses every Ruby file with Prism on all CPU cores, joins the files into one table, and adds the Rails, RSpec, FactoryBot and Stimulus rules.</p>
+        <p>The result is saved in <code>~/.cache/rubyscope/</code>, or in <code>$XDG_CACHE_HOME/rubyscope/</code>. At the next start rubyscope parses only the files whose size or change time is different. For a large Rails app with its gems, the index is ready in less than a second with the saved index, and in a few seconds without it.</p>
+        <p>While the window is open, a file watcher sees changes in <code>app/</code>, <code>config/</code>, <code>db/</code>, <code>lib/</code>, <code>spec/</code>, <code>test/</code>, <code>Gemfile</code> and <code>Gemfile.lock</code>. Open tabs load the new text and the index builds again from the changed files.</p>
+        <p>The saved index is not used after a new build of rubyscope with new parse rules, or when <code>config/initializers/inflections.rb</code> changed. "Index the project again" in <kbd>Ctrl</kbd> <kbd>K</kbd> parses every file and writes a new saved index.</p>
+      </section>
+
+      <section id="limits">
+        <h2>Limits</h2>
+        <ul>
+          <li>Methods with names that exist only at runtime, such as <code>define_method</code> with a variable name, <code>method_missing</code> or <code>class_eval</code> with a string, cannot be found by reading the code. For these, rubyscope lists the methods with that name.</li>
+          <li>Some variable types are guesses. The hover always says when a type is a guess.</li>
+          <li>RBS signatures for core classes are not read yet. <code>"x".strip</code> gives a name-only list, because <code>String</code> is written in C.</li>
+          <li>Custom Zeitwerk setups are read from the initializers only.</li>
+          <li>Files outside the watched folders do not update the index while the window is open. Use "Index the project again".</li>
+        </ul>
+      </section>
+
+      <section id="files">
+        <h2>Files rubyscope writes</h2>
+        <p>rubyscope never writes into the project folder.</p>
+        <table>
+          <thead><tr><th scope="col">Path</th><th scope="col">What it holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>~/.cache/rubyscope/</code></td><td>The saved index of each project</td></tr>
+            <tr><td><code>~/.local/state/rubyscope/recent.json</code></td><td>The recent projects, up to twelve</td></tr>
+            <tr><td><code>~/.local/state/rubyscope/session*.json</code></td><td>The open tabs of each project</td></tr>
+          </tbody>
+        </table>
+        <p>It reads <code>~/.config/rubyscope/keys.toml</code> for keys and the current Omarchy theme for colors.</p>
+      </section>
+
+      <section id="env">
+        <h2>Environment variables</h2>
+        <table>
+          <thead><tr><th scope="col">Variable</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>XDG_CACHE_HOME</code></td><td>The folder for the saved index. It must be an absolute path.</td></tr>
+            <tr><td><code>RUBYSCOPE_APP_ID</code></td><td>The app id of the window, which window manager rules match. The default is <code>rubyscope</code>.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+        <table>
+          <thead><tr><th scope="col">Problem</th><th scope="col">What to do</th></tr></thead>
+          <tbody>
+            <tr><td class="wrap-ok">A click goes to an old line, or a new method is not found</td><td>Press <kbd>Ctrl</kbd> <kbd>K</kbd> and choose "Index the project again". If that does not help, close rubyscope and delete <code>~/.cache/rubyscope/</code>.</td></tr>
+            <tr><td class="wrap-ok">A click on a gem or a Rails method does nothing</td><td>Run <code>ruby -v</code> and <code>bundle install</code> in the project folder. Only gems installed for the project's Ruby are indexed.</td></tr>
+            <tr><td class="wrap-ok">Blame does not show</td><td>The project must be a git repository, and <code>git</code> must be on <code>PATH</code>.</td></tr>
+            <tr><td class="wrap-ok">"This project has no GitHub remote"</td><td>The <code>origin</code> remote must be on github.com.</td></tr>
+            <tr><td class="wrap-ok">A blame click opens the commit, not the pull request</td><td>Install the GitHub CLI, <code>gh</code>, and log in.</td></tr>
+            <tr><td class="wrap-ok">You want to see what the index does</td><td>Start rubyscope from a terminal. It prints a line such as <code>indexed 9000 files in 0.71 s</code>.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="cli">
+        <h2>Command-line tool</h2>
+        <p><code>rubyscope-cli</code> builds the same index as the window and answers questions about it. Use it to test the index or to script a lookup. Positions are <code>FILE:LINE:COL</code>, starting at 1.</p>
+<pre><code>rubyscope-cli -r ~/code/shop index                         <span class="c"># build the index, print counts and times</span>
+rubyscope-cli -r ~/code/shop def app/models/order.rb:12:5  <span class="c"># where the name goes</span>
+rubyscope-cli -r ~/code/shop refs app/models/order.rb:12:5 <span class="c"># every usage, the first 40</span>
+rubyscope-cli -r ~/code/shop hover app/models/order.rb:12:5
+rubyscope-cli -r ~/code/shop related app/controllers/orders_controller.rb:8:7
+rubyscope-cli -r ~/code/shop outline app/models/order.rb
+rubyscope-cli -r ~/code/shop search "ready_to_ship"
+rubyscope-cli -r ~/code/shop search --regex "def (create|update)"
+rubyscope-cli -r ~/code/shop ancestors ApplicationRecord</code></pre>
+        <table>
+          <thead><tr><th scope="col">Option</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>-r</code>, <code>--root FOLDER</code></td><td>The project folder. The default is the current folder.</td></tr>
+            <tr><td><code>--no-gems</code></td><td>Do not index gems</td></tr>
+            <tr><td><code>--no-stdlib</code></td><td>Do not index the Ruby standard library</td></tr>
+            <tr><td><code>--no-cache</code></td><td>Do not read or write the saved index</td></tr>
+          </tbody>
+        </table>
+        <p>To compare rubyscope with a booted Rails app, run <code>probe/rails_probe.rb</code> inside the app with <code>bin/rails runner</code>, then <code>rubyscope-cli check</code> on the JSON file it writes. See the <a href="https://github.com/equivalent/rubyscope#checking-against-booted-rails">README</a> for details.</p>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <p>rubyscope is open source under the MIT license.</p>
+      <nav aria-label="Footer">
+        <a href="../">Home</a>
+        <a href="https://github.com/equivalent/rubyscope">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="../js/site.js"></script>
+</body>
+</html>

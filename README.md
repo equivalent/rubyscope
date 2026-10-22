@@ -492,6 +492,7 @@ RUBYSCOPE_PROJECT=~/code/shop cargo test -p rubyscope real_project_smoke -- --no
 | `bin/install` | Builds and installs rubyscope for this user |
 | `bin/ci` | Runs every check before a push: formatting, clippy, tests, private paths |
 | `packaging/rubyscope.desktop` | The app launcher entry |
+| `webpage/` | The web page and the docs, plain HTML and CSS (see `webpage/README.md`) |
 
 Main files in `crates/index/src`:
 

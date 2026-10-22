@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rubyscope: go to definition for Ruby and Rails code</title>
+  <meta name="description" content="A small desktop app for reading Ruby and Rails code. Ctrl+click a class, method, route helper, translation key or partial to open where it is defined. Linux and macOS.">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="img/icon-32.png" sizes="32x32">
+  <link rel="preload" href="fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/site.css">
+  <meta property="og:title" content="rubyscope">
+  <meta property="og:description" content="Ctrl+click any name in a Rails app and land on the line that defines it.">
+  <meta property="og:image" content="img/shots/hover.webp">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="img/icon.svg" alt="" width="30" height="30">rubyscope</a>
+      <nav class="site-nav" aria-label="Main">
+        <a class="wide" href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="docs/">Docs</a>
+        <a href="https://github.com/equivalent/rubyscope">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-text">
+          <h1>Click a name in a Rails app. Land on the line that defines it.</h1>
+          <div>
+            <p class="lede">rubyscope is a small desktop app for reading Ruby and Rails code. Hold Ctrl and click a class, a method, a route helper, a translation key or a partial. It opens where that thing is written.</p>
+            <div class="actions">
+              <a class="button primary" href="#install">Install rubyscope</a>
+              <a class="button" href="docs/">Read the docs</a>
+            </div>
+          </div>
+          <ul class="facts">
+            <li>Starts in about one second</li>
+            <li>Reads your code and never changes it</li>
+            <li>Linux and macOS</li>
+            <li>Free and open source, MIT</li>
+          </ul>
+        </div>
+
+        <figure class="demo" id="demo" data-state="start">
+          <div class="demo-frame">
+            <img src="img/shots/ctrl-hover.webp" data-for="start" width="2560" height="1520"
+                 alt="rubyscope with app/services/shipping.rb open. Ctrl is held and the class name Order has an underline.">
+            <img src="img/shots/class-definition.webp" data-for="class" width="2560" height="1520" hidden loading="lazy"
+                 alt="rubyscope after the click: app/models/order.rb is open at class Order.">
+            <img src="img/shots/method-definition.webp" data-for="method" width="2560" height="1520" hidden loading="lazy"
+                 alt="rubyscope after the click: app/models/order.rb is open at def ship!.">
+
+            <button class="spot" data-for="start" data-go="class" style="left:25.7%;top:31.3%;width:4.1%;height:3.8%"
+                    aria-label="Ctrl+click Order"><span class="tip">Ctrl+click Order</span></button>
+            <button class="spot" data-for="start" data-go="method" style="left:31%;top:41.6%;width:4.2%;height:3.6%"
+                    aria-label="Ctrl+click ship!"></button>
+            <button class="spot" data-for="class method" data-go="start" style="left:0.35%;top:0.5%;width:2.2%;height:3%"
+                    aria-label="Go back" hidden><span class="tip">Back</span></button>
+          </div>
+          <figcaption class="demo-bar">
+            <p data-for="start"><strong>Try it.</strong> This is a real screenshot. Ctrl is held, so <code>Order</code> has an underline. Click it, or click <code>ship!</code> lower down.</p>
+            <p data-for="class" hidden><strong>app/models/order.rb, line 2.</strong> The click found the class through Ruby's constant lookup. Use the back button in the top bar to return.</p>
+            <p data-for="method" hidden><strong>Order#ship!, line 22.</strong> rubyscope knew that <code>order</code> is an <code>Order</code>, because it comes from <code>Order.ready_to_ship.find_each</code>.</p>
+            <button class="demo-reset" type="button" data-go="start" hidden>Start again</button>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Go to definition that knows Rails</h2>
+          <p>A text search finds every <code>ship!</code> in the project. rubyscope finds the one you mean. It follows Ruby's lookup rules and the conventions of Rails, RSpec, FactoryBot and Stimulus.</p>
+        </div>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Methods, and the type behind them</h3>
+            <p>Rest the pointer on a name to see its signature, its docs and where it is defined. The popup also says how rubyscope found the type: exact, inferred, a guess, or by name only.</p>
+            <ul>
+              <li>Method lookup in Ruby's order: prepends, the class, includes, the superclass</li>
+              <li>Concerns, <code>class_methods</code>, <code>delegate</code>, <code>super</code></li>
+              <li>Associations, scopes, enums and columns from <code>db/schema.rb</code></li>
+            </ul>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/hover.webp" width="1658" height="960" loading="lazy"
+                   alt="A popup over order.ship! shows Order#ship!, marked inferred, with its file and line and the comment above the method.">
+              <figcaption>The block variable <code>order</code> comes from a scope on <code>Order</code>, so the call goes to <code>Order#ship!</code>.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>From a controller action to its view, and back</h3>
+            <p>Ctrl+click the name of an action to open its template or Phlex view. A view shows a link to its action above the code, so the way back is one click too.</p>
+            <ul>
+              <li>ERB templates, Phlex views and variant folders</li>
+              <li>Mailer methods and their templates</li>
+              <li>The right-click menu has "Go to view" and "Go to controller action"</li>
+            </ul>
+          </div>
+          <div class="shots">
+            <figure class="shot jump">
+              <img src="img/shots/action-hover.webp" width="1402" height="716" loading="lazy"
+                   alt="orders_controller.rb with Ctrl held over the show action.">
+              <figcaption>Ctrl+click <code>def show</code> in the controller.</figcaption>
+            </figure>
+            <figure class="shot jump">
+              <img src="img/shots/view-from-action.webp" width="1402" height="1036" loading="lazy"
+                   alt="show.html.erb is open, with a bar above the code that links to OrdersController#show.">
+              <figcaption>The view opens. The bar at the top goes back to <code>OrdersController#show</code>.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Translation keys and route helpers</h3>
+            <p>A click on <code>t(".updated")</code> opens the line in the locale file, in every locale. Lazy keys work in controllers, templates and Phlex views. A route helper such as <code>order_path</code> opens the line in the routes file.</p>
+            <ul>
+              <li><code>render "orders/line_item"</code> opens the partial</li>
+              <li><code>resources :orders</code> opens the controller</li>
+              <li><code>data-action="order#ship"</code> opens the Stimulus method</li>
+            </ul>
+          </div>
+          <div class="shots">
+            <figure class="shot jump">
+              <img src="img/shots/i18n-hover.webp" width="1402" height="1036" loading="lazy"
+                   alt="The update action, with Ctrl held over the lazy translation key .updated.">
+              <figcaption>A lazy key in <code>OrdersController#update</code>.</figcaption>
+            </figure>
+            <figure class="shot jump narrow">
+              <img src="img/shots/i18n.webp" width="982" height="636" loading="lazy"
+                   alt="config/locales/en.yml is open at orders.update.updated.">
+              <figcaption><code>en.orders.update.updated</code> in the locale file.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Who uses this?</h3>
+            <p>Ctrl+click a class name where it is defined, and the results panel lists every place that uses it. For a method, right-click and choose "Find usages". The "callers" button on a row goes one level up the call stack.</p>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/usages.webp" width="2042" height="1280" loading="lazy"
+                   alt="order.rb with a results panel at the bottom titled Usages of Order, with two rows: the orders controller and the shipping service.">
+              <figcaption>Each row shows the file, the method it is in, and the line.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>When a name means several things</h3>
+            <p>Some calls have no known receiver, such as a method on a block argument. rubyscope then lists every definition with that name, and says how sure it is about each one. It never guesses in silence.</p>
+          </div>
+          <div class="shots">
+            <figure class="shot narrow">
+              <img src="img/shots/choose.webp" width="982" height="576" loading="lazy"
+                   alt="A small list titled Choose a definition of ship!, with Order#ship! and GiftCard#ship!.">
+              <figcaption><code>item.ship!</code> could be an order or a gift card.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Git blame next to the code</h3>
+            <p>Press <kbd>Ctrl</kbd> <kbd>B</kbd>. Each line shows the date and the author, and newer lines get a stronger blue. Click a block to open the commit, or its pull request, on GitHub.</p>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/blame.webp" width="1402" height="1456" loading="lazy"
+                   alt="order.rb with a blame column on the left that shows a date and an author's last name on each line.">
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Keys for everything</h3>
+            <p><kbd>Ctrl</kbd> <kbd>P</kbd> finds a file. <kbd>Ctrl</kbd> <kbd>T</kbd> finds a class, method or constant in the project and its gems. <kbd>Ctrl</kbd> <kbd>K</kbd> lists every command. Scroll with <kbd>j</kbd> and <kbd>k</kbd>, and go to the top with <kbd>g</kbd><kbd>g</kbd>, as in Vim.</p>
+            <p><a href="docs/#keys">All keys</a></p>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/go-to-symbol.webp" width="1562" height="770" loading="lazy"
+                   alt="The go to symbol list, filtered by ship.">
+              <figcaption>Go to symbol</figcaption>
+            </figure>
+            <figure class="shot">
+              <img src="img/shots/commands.webp" width="1562" height="816" loading="lazy"
+                   alt="The command list with every command and its key.">
+              <figcaption>All commands</figcaption>
+            </figure>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="understands">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>What a click understands</h2>
+          <p>rubyscope reads the source. It does not boot Rails or run your code, so it works on an app that does not start.</p>
+        </div>
+        <dl class="understands">
+          <div><dt>Constants</dt><dd>Lexical scopes, ancestors, <code>class A::B</code>, constant aliases and Zeitwerk folder namespaces.</dd></div>
+          <div><dt>Methods</dt><dd><code>class &lt;&lt; self</code>, <code>extend</code>, <code>module_function</code>, <code>class_eval</code>, <code>ActiveSupport.on_load</code>.</dd></div>
+          <div><dt>Rails DSLs</dt><dd>Associations, scopes, enums, <code>delegate</code>, <code>attribute</code>, <code>store_accessor</code>, attachments, schema columns.</dd></div>
+          <div><dt>Symbols that name methods</dt><dd><code>before_action :load</code>, <code>validate :check</code>, <code>if: :paid?</code>, <code>send(:x)</code>.</dd></div>
+          <div><dt>Variable types</dt><dd><code>Model.find</code>, relations, block parameters, instance variables, YARD <code>@return</code>, FactoryBot <code>create(:x)</code>.</dd></div>
+          <div><dt>Views</dt><dd>Controller actions and views both ways, partials, Phlex kit calls, and Ruby inside ERB tags.</dd></div>
+          <div><dt>Routes and locales</dt><dd>Route helpers, <code>resources</code>, <code>to: "a#b"</code>, and <code>t("a.b")</code> keys in every locale file.</dd></div>
+          <div><dt>Tests</dt><dd>RSpec <code>let</code>, <code>subject</code>, <code>described_class</code>, shared examples, factories and traits.</dd></div>
+          <div><dt>Gems</dt><dd>Every gem in <code>Gemfile.lock</code> that is installed, and the Ruby standard library.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="wrap">
+        <h2>Fast on a large app, and safe to leave open</h2>
+        <div class="cols">
+          <div>
+            <h3>About one second to start</h3>
+            <p>rubyscope parses every Ruby file with Prism, on all CPU cores, and saves the index. The next start reads the saved index and parses only the files that changed.</p>
+          </div>
+          <div>
+            <h3>Stays up to date</h3>
+            <p>A file watcher sees changes in <code>app</code>, <code>config</code>, <code>db</code>, <code>lib</code> and the specs. Open tabs load the new text and the index updates itself.</p>
+          </div>
+          <div>
+            <h3>Reads only</h3>
+            <p>rubyscope never writes into your project. To change a file, open it in your editor from the right-click menu, at the same line.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="install">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Install</h2>
+          <p>rubyscope is built from source with Rust 1.88 or newer, clang and libclang.</p>
+        </div>
+        <div class="install">
+          <div>
+            <h3>Linux</h3>
+<pre><code>git clone https://github.com/equivalent/rubyscope
+cd rubyscope
+bin/install
+rubyscope ~/code/shop</code></pre>
+            <p>Installs the app in <code>~/.local/bin</code> with an app launcher entry. Built and used on Wayland.</p>
+          </div>
+          <div>
+            <h3>macOS</h3>
+<pre><code>git clone https://github.com/equivalent/rubyscope
+cd rubyscope
+bin/install-macos
+rubyscope ~/code/shop</code></pre>
+            <p>Installs <code>rubyscope.app</code> in <code>~/Applications</code>. Runs on Apple silicon. Use Cmd where the docs say Ctrl.</p>
+          </div>
+        </div>
+        <p><a class="button" href="docs/">Read the docs</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <p>rubyscope is open source under the MIT license.</p>
+      <nav aria-label="Footer">
+        <a href="docs/">Docs</a>
+        <a href="https://github.com/equivalent/rubyscope">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

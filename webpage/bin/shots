@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Makes the screenshots of the web page from the real window.
+#
+# It runs the ignored `shots` test of the app (a made-up shop app, driven
+# with clicks and keys), then crops each picture and saves it as WebP in
+# webpage/img/shots. Needs python3 with Pillow.
+#
+# On Linux without a GPU, point VK_ICD_FILENAMES at Mesa's lavapipe
+# (lvp_icd.json). The fonts are what fc-match gives for "monospace".
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+raw=$(mktemp -d)
+trap 'rm -rf "$raw"' EXIT
+RUBYSCOPE_SHOTS="$raw" cargo test -p rubyscope shots -- --ignored --exact shots::shots
+python3 webpage/bin/crop.py "$raw" webpage/img/shots
