@@ -170,6 +170,44 @@ class Shipping
 end
 "#;
 
+const SHOP: &str = r#"# Settings of the shop.
+module Shop
+  CURRENCY = "EUR"
+  FREE_SHIPPING_CENTS = 5_000
+end
+"#;
+
+const SHIPPING_QUOTE: &str = r#"# The shipping price of an order, in cents.
+class ShippingQuote
+  PRICE_CENTS = 490
+
+  def call(order)
+    return 0 if order.total_cents >= Shop::FREE_SHIPPING_CENTS
+
+    PRICE_CENTS
+  end
+end
+"#;
+
+const ORDERS_HELPER: &str = r#"module OrdersHelper
+  # How much more the customer has to buy to ship for free.
+  def free_shipping_gap(order)
+    gap = Shop::FREE_SHIPPING_CENTS - order.total_cents
+    number_to_currency([gap, 0].max / 100.0, unit: Shop::CURRENCY)
+  end
+end
+"#;
+
+const SHIPPING_QUOTE_SPEC: &str = r#"require "rails_helper"
+
+RSpec.describe ShippingQuote do
+  it "ships for free from the limit up" do
+    order = build(:order, total_cents: Shop::FREE_SHIPPING_CENTS)
+    expect(described_class.new.call(order)).to eq(0)
+  end
+end
+"#;
+
 const STEPS: &[Step] = &[
     (
         "Ada Novak",
@@ -240,6 +278,10 @@ const STEPS: &[Step] = &[
             ),
             ("app/services/gift_card.rb", "class GiftCard\n  # Ships a gift card.\n  def ship!\n  end\nend\n"),
             ("app/services/fulfil.rb", "class Fulfil\n  def call(item)\n    item.ship!\n  end\nend\n"),
+            ("app/models/shop.rb", SHOP),
+            ("app/services/shipping_quote.rb", SHIPPING_QUOTE),
+            ("app/helpers/orders_helper.rb", ORDERS_HELPER),
+            ("spec/services/shipping_quote_spec.rb", SHIPPING_QUOTE_SPEC),
         ],
     ),
 ];
@@ -304,6 +346,22 @@ fn point(h: &Harness<'static, App>, line: usize, col: usize) -> Pos2 {
     let t = h.state().current().expect("a tab");
     let (origin, row_h, char_w, first) = t.layout.expect("drawn");
     Pos2::new(origin.x + (col as f32 - 0.5) * char_w, origin.y + (line - 1 - first) as f32 * row_h + row_h * 0.35)
+}
+
+/// Prints where a name is in the window, in percent, for a click spot on the web page.
+fn spot(h: &Harness<'static, App>, name: &str, line: usize, col: usize, len: usize) {
+    let t = h.state().current().expect("a tab");
+    let (origin, row_h, char_w, first) = t.layout.expect("drawn");
+    let (w, ht) = (1280.0, 760.0);
+    let x = origin.x + (col as f32 - 1.0) * char_w;
+    let y = origin.y + (line - 1 - first) as f32 * row_h;
+    println!(
+        "spot {name}: left:{:.1}%;top:{:.1}%;width:{:.1}%;height:{:.1}%",
+        x / w * 100.0,
+        y / ht * 100.0,
+        len as f32 * char_w / w * 100.0,
+        row_h / ht * 100.0
+    );
 }
 
 fn open(h: &mut Harness<'static, App>, root: &Path, rel: &str) {
@@ -415,6 +473,25 @@ fn shots() {
     open(&mut h, &root, "app/models/order.rb");
     ctrl_click(&mut h, 2, 9);
     shot(&mut h, "usages");
+
+    // The "Try it" demo on the web page: one scene per kind of jump, each a
+    // whole window before and after the click.
+    let scenes: &[(&str, &str, usize, usize, usize)] = &[
+        ("view", "app/controllers/orders_controller.rb", 8, 7, 4),
+        ("partial", "app/views/orders/show.html.erb", 8, 25, 18),
+        ("route", "app/controllers/orders_controller.rb", 17, 19, 10),
+        ("constant", "app/models/shop.rb", 4, 3, 19),
+        ("i18n", "app/controllers/orders_controller.rb", 17, 49, 10),
+    ];
+    for &(name, file, line, col, len) in scenes {
+        let mut h = harness(&root);
+        open(&mut h, &root, file);
+        ctrl_hover(&mut h, line, col + 2);
+        spot(&h, name, line, col, len);
+        shot(&mut h, &format!("try-{name}"));
+        ctrl_click(&mut h, line, col + 2);
+        shot(&mut h, &format!("try-{name}-done"));
+    }
 
     // Git blame.
     let mut h = harness(&root);

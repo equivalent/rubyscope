@@ -31,6 +31,10 @@ CROPS = {
     "commands": (518, 64, 2080, 880),
     "go-to-file": (518, 110, 2080, 330),
 }
+# The scenes of the "Try it" demo: the whole window, before and after the click.
+for scene in ("view", "partial", "route", "constant", "i18n"):
+    CROPS[f"try-{scene}"] = FULL
+    CROPS[f"try-{scene}-done"] = FULL
 
 
 def main(raw: Path, out: Path) -> None:

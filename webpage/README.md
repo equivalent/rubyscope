@@ -62,3 +62,7 @@ Font has every symbol the window uses.
 
 When a screenshot changes size, update the `width` and `height` of its
 `img` tag.
+
+The "Try it" demo has one tab per kind of jump. Its click spots are
+percent boxes over the screenshot; `bin/shots` prints them as
+`spot <scene>: left:…`, to copy into the `style` of each `.spot` button.
