@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="css/site.css">
   <meta property="og:title" content="Rubyscope: a code browser for Ruby on Rails">
   <meta property="og:description" content="Ctrl+click any name in a Rails app and land on the line that defines it.">
-  <meta property="og:image" content="img/shots/hover.webp">
+  <meta property="og:image" content="img/shots/splash.webp">
 </head>
 <body>
   <a class="skip" href="#main">Skip to the content</a>
@@ -34,6 +34,7 @@
         <div class="hero-text">
           <h1>A code browser for Ruby on Rails</h1>
           <div>
+            <p class="platforms"><span>Runs on Omarchy Linux</span> <span>Works on macOS too</span></p>
             <p class="lede">Rubyscope is a small desktop app for reading Ruby and Rails code. Hold Ctrl and click a class, a method, a route helper, a translation key or a partial. It opens where that thing is written. Built in Rust, for Omarchy Linux and macOS.</p>
             <div class="actions">
               <a class="button primary" href="#install">Install Rubyscope</a>
@@ -44,81 +45,14 @@
             <li>Starts in about one second</li>
             <li>Reads your code and never changes it</li>
             <li>Built in Rust</li>
-            <li>Omarchy Linux and macOS</li>
             <li>Free and open source, MIT</li>
           </ul>
         </div>
 
-        <figure class="demo" id="demo" data-state="code">
-          <div class="demo-tabs" role="group" aria-label="Kinds of jump">
-            <button type="button" data-go="code" aria-pressed="true">Class and method</button>
-            <button type="button" data-go="view" aria-pressed="false">Controller to view</button>
-            <button type="button" data-go="partial" aria-pressed="false">Partial</button>
-            <button type="button" data-go="route" aria-pressed="false">Route helper</button>
-            <button type="button" data-go="constant" aria-pressed="false">Constant usages</button>
-            <button type="button" data-go="i18n" aria-pressed="false">Translation key</button>
-          </div>
-          <div class="demo-frame">
-            <img src="img/shots/ctrl-hover.webp" data-for="code" width="2560" height="1520"
-                 alt="Rubyscope with app/services/shipping.rb open. Ctrl is held and the class name Order has an underline.">
-            <img src="img/shots/class-definition.webp" data-for="code-class" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: app/models/order.rb is open at class Order.">
-            <img src="img/shots/method-definition.webp" data-for="code-method" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: app/models/order.rb is open at def ship!.">
-            <img src="img/shots/try-view.webp" data-for="view" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope with the orders controller open. Ctrl is held over the show action.">
-            <img src="img/shots/try-view-done.webp" data-for="view-done" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: app/views/orders/show.html.erb is open.">
-            <img src="img/shots/try-partial.webp" data-for="partial" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope with app/views/orders/show.html.erb open. Ctrl is held over the partial orders/line_item.">
-            <img src="img/shots/try-partial-done.webp" data-for="partial-done" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: app/views/orders/_line_item.html.erb is open.">
-            <img src="img/shots/try-route.webp" data-for="route" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope with the orders controller open. Ctrl is held over order_path.">
-            <img src="img/shots/try-route-done.webp" data-for="route-done" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: config/routes.rb is open at resources :orders.">
-            <img src="img/shots/try-constant.webp" data-for="constant" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope with app/models/shop.rb open. Ctrl is held over the constant FREE_SHIPPING_CENTS where it is defined.">
-            <img src="img/shots/try-constant-done.webp" data-for="constant-done" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: the results panel lists 3 usages of Shop::FREE_SHIPPING_CENTS.">
-            <img src="img/shots/try-i18n.webp" data-for="i18n" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope with the orders controller open. Ctrl is held over the lazy translation key .updated.">
-            <img src="img/shots/try-i18n-done.webp" data-for="i18n-done" width="2560" height="1520" hidden loading="lazy"
-                 alt="Rubyscope after the click: config/locales/en.yml is open at updated.">
-
-            <button class="spot" data-for="code" data-go="code-class" style="left:25.7%;top:31.3%;width:4.1%;height:3.8%"
-                    aria-label="Ctrl+click Order"><span class="tip">Ctrl+click Order</span></button>
-            <button class="spot" data-for="code" data-go="code-method" style="left:31%;top:41.6%;width:4.2%;height:3.6%"
-                    aria-label="Ctrl+click ship!"></button>
-            <button class="spot" data-for="view" data-go="view-done" style="left:27.4%;top:31.9%;width:2.6%;height:3.4%" hidden
-                    aria-label="Ctrl+click show"><span class="tip">Ctrl+click show</span></button>
-            <button class="spot" data-for="partial" data-go="partial-done" style="left:39.2%;top:35.5%;width:11.8%;height:3.4%" hidden
-                    aria-label="Ctrl+click &quot;orders/line_item&quot;"><span class="tip">Ctrl+click "orders/line_item"</span></button>
-            <button class="spot" data-for="route" data-go="route-done" style="left:35.3%;top:62.7%;width:6.6%;height:3.4%" hidden
-                    aria-label="Ctrl+click order_path"><span class="tip">Ctrl+click order_path</span></button>
-            <button class="spot" data-for="constant" data-go="constant-done" style="left:24.2%;top:18.2%;width:12.5%;height:3.4%" hidden
-                    aria-label="Ctrl+click FREE_SHIPPING_CENTS"><span class="tip">Ctrl+click FREE_SHIPPING_CENTS</span></button>
-            <button class="spot" data-for="i18n" data-go="i18n-done" style="left:55%;top:62.7%;width:6.6%;height:3.4%" hidden
-                    aria-label="Ctrl+click &quot;.updated&quot;"><span class="tip">Ctrl+click ".updated"</span></button>
-            <button class="spot" data-for="code-class code-method view-done partial-done route-done constant-done i18n-done" data-go="back" style="left:0.35%;top:0.5%;width:2.2%;height:3%"
-                    aria-label="Go back" hidden><span class="tip">Back</span></button>
-          </div>
-          <figcaption class="demo-bar">
-            <p data-for="code"><strong>Try it.</strong> These are real screenshots. Ctrl is held, so <code>Order</code> has an underline. Click it, or click <code>ship!</code> lower down. The tabs above show more kinds of jump.</p>
-            <p data-for="code-class" hidden><strong>app/models/order.rb, line 2.</strong> The click found the class through Ruby's constant lookup. Use the back button in the top bar to return.</p>
-            <p data-for="code-method" hidden><strong>Order#ship!, line 22.</strong> Rubyscope knew that <code>order</code> is an <code>Order</code>, because it comes from <code>Order.ready_to_ship.find_each</code>.</p>
-            <p data-for="view" hidden><strong>Try it.</strong> Ctrl is held over the <code>show</code> action in the orders controller. Click it to open its template.</p>
-            <p data-for="view-done" hidden><strong>app/views/orders/show.html.erb.</strong> The action opened its template. The bar above the code links back to <code>OrdersController#show</code>.</p>
-            <p data-for="partial" hidden><strong>Try it.</strong> Ctrl is held over a partial in a template. Click <code>"orders/line_item"</code>.</p>
-            <p data-for="partial-done" hidden><strong>app/views/orders/_line_item.html.erb.</strong> The partial name became its file, with the underscore and the template extension.</p>
-            <p data-for="route" hidden><strong>Try it.</strong> Ctrl is held over the route helper <code>order_path</code>. Click it.</p>
-            <p data-for="route-done" hidden><strong>config/routes.rb, line 2.</strong> <code>order_path</code> comes from <code>resources :orders</code>, so the click opens that line.</p>
-            <p data-for="constant" hidden><strong>Try it.</strong> This is where a constant is defined. Ctrl+click <code>FREE_SHIPPING_CENTS</code> to see where it is used.</p>
-            <p data-for="constant-done" hidden><strong>3 usages of Shop::FREE_SHIPPING_CENTS.</strong> A helper, a service and a spec. In the app, a click on a row opens that line, and "callers" goes one level up.</p>
-            <p data-for="i18n" hidden><strong>Try it.</strong> Ctrl is held over a lazy translation key in the update action. Click <code>".updated"</code>.</p>
-            <p data-for="i18n-done" hidden><strong>config/locales/en.yml, line 9.</strong> The lazy key <code>.updated</code> in <code>OrdersController#update</code> is <code>en.orders.update.updated</code>.</p>
-            <button class="demo-reset" type="button" data-go="back" hidden>Start again</button>
-          </figcaption>
+        <figure class="splash">
+          <img src="img/shots/splash.webp" width="2560" height="1520"
+               alt="Rubyscope on a Rails app. A popup over order.ship! shows Order#ship!, its file and its docs. The panel below lists the usages of Order.">
+          <figcaption>The real window. The popup knows that <code>order</code> is an <code>Order</code>, and the panel below lists where <code>Order</code> is used.</figcaption>
         </figure>
       </div>
     </section>

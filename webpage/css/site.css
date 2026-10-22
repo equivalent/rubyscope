@@ -333,150 +333,49 @@ pre .c {
   background: var(--ruby);
 }
 
-/* The demo: real screenshots with places to click */
+/* The splash picture: one real screenshot of the window */
 
-.demo {
+.splash {
   margin-inline: 0;
   margin-top: clamp(2.5rem, 6vw, 4rem);
 }
 
-.demo-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.demo-tabs button {
-  padding: 0.45rem 0.9rem;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: none;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: var(--step--1);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 120ms, color 120ms, border-color 120ms;
-}
-
-.demo-tabs button:hover {
-  border-color: var(--ink-2);
-  color: var(--ink);
-}
-
-.demo-tabs button[aria-pressed="true"] {
-  border-color: var(--ruby);
-  background: var(--ruby);
-  color: #fff;
-}
-
-.demo-frame {
-  position: relative;
-  overflow: hidden;
+.splash img {
+  width: 100%;
   border: 1px solid #0d0e14;
   border-radius: 12px;
   background: var(--night);
   box-shadow: var(--shadow);
 }
 
-.demo-frame img {
-  width: 100%;
-}
-
-.demo-frame img[hidden] {
-  display: none;
-}
-
-.spot {
-  position: absolute;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  box-shadow: 0 0 0 2px rgb(232 37 74 / 0.9);
-  animation: spot 2.4s ease-in-out 1.2s 3;
-}
-
-.spot[hidden] {
-  display: none;
-}
-
-.spot:hover,
-.spot:focus-visible {
-  outline: none;
-  background: rgb(122 162 247 / 0.18);
-  box-shadow: 0 0 0 2px var(--night-blue);
-}
-
-.spot .tip {
-  position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  background: var(--ruby);
-  color: #fff;
-  font-family: var(--sans);
-  font-size: 0.8rem;
-  font-weight: 650;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.spot .tip::after {
-  content: "";
-  position: absolute;
-  right: 100%;
-  top: 50%;
-  margin-top: -5px;
-  border: 5px solid transparent;
-  border-right-color: var(--ruby);
-}
-
-@keyframes spot {
-  50% {
-    box-shadow: 0 0 0 6px rgb(232 37 74 / 0.25);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spot {
-    animation: none;
-  }
-}
-
-.demo-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 2rem;
+.splash figcaption {
   margin-top: 1rem;
   color: var(--ink-2);
   font-size: var(--step--1);
 }
 
-.demo-bar p {
-  margin: 0;
+/* The line above the title that names the systems */
+
+.platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
 }
 
-.demo-bar strong {
+.platforms span {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
   color: var(--ink);
+  font-size: var(--step--1);
+  font-weight: 600;
 }
 
-.demo-reset {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--link);
-  font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
-  cursor: pointer;
+.platforms span:first-child {
+  border-color: var(--ruby);
+  background: var(--ruby);
+  color: #fff;
 }
 
 /* Sections */
@@ -893,10 +792,6 @@ td.wrap-ok {
   .understands div:nth-child(even) {
     padding-left: 0;
     border-left: 0;
-  }
-
-  .spot .tip {
-    display: none;
   }
 
   td:first-child {

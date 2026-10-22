@@ -8,7 +8,7 @@ The landing page (`index.html`) and the docs (`docs/index.html`, served at
 | `index.html` | The landing page |
 | `docs/index.html` | How to use rubyscope: mouse, keys, settings |
 | `css/site.css` | The styles of both pages |
-| `js/site.js` | The screenshot demo, the header line and the docs contents |
+| `js/site.js` | The header line and the docs contents |
 | `fonts/` | Schibsted Grotesk and JetBrains Mono (SIL Open Font License) |
 | `img/shots/` | Screenshots of the real window |
 | `bin/shots` | Makes the screenshots again |
@@ -62,7 +62,3 @@ Font has every symbol the window uses.
 
 When a screenshot changes size, update the `width` and `height` of its
 `img` tag.
-
-The "Try it" demo has one tab per kind of jump. Its click spots are
-percent boxes over the screenshot; `bin/shots` prints them as
-`spot <scene>: left:…`, to copy into the `style` of each `.spot` button.
