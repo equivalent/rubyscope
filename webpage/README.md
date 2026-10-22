@@ -24,6 +24,25 @@ Then open http://localhost:4321/ and http://localhost:4321/docs/.
 
 Any static host works: serve the `webpage` folder as the site root.
 
+## Deploy
+
+https://rubyscope.equivalent.work, with Kamal 2, from `t@len` only. The page
+is the `rubyscope-site` service: nginx serves the files, and kamal-proxy
+routes `rubyscope.equivalent.work` to it. The proxy is shared with other
+apps on the server, so never `kamal proxy reboot` it.
+
+```
+cd webpage
+kamal deploy       # the first time: kamal setup
+```
+
+The server is `deploy.equivalent.work`, a DNS name for its IP address, so
+the address stays out of this repo. `rubyscope.equivalent.work` is a CNAME to
+that name. Both are DNS only in Cloudflare (no proxy), so kamal-proxy can get
+its Let's Encrypt certificate. The health check is `GET /up`. A deploy builds
+from the files in this folder, so it needs no commit. `bin/`, `config/` and
+the README are not shipped (see `.dockerignore`).
+
 ## Screenshots
 
 The screenshots come from the real window, not from a mockup.

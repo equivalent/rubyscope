@@ -1,0 +1,30 @@
+# The web page, deployed with Kamal 2. nginx serves the static files. Deploy
+# from t@len only, never from macOS. See "Deploy" in README.md.
+service: rubyscope-site
+image: rubyscope-site
+
+# deploy.equivalent.work points at the server, so its IP address stays out of
+# this public repo.
+servers:
+  web:
+    hosts:
+      - deploy.equivalent.work
+
+# kamal-proxy is shared with the other apps on this server. It routes by host
+# name; never `kamal proxy reboot` it.
+proxy:
+  ssl: true
+  host: rubyscope.equivalent.work
+  app_port: 80
+  healthcheck:
+    path: /up
+
+# Kamal's built-in local registry, the same one the other apps on the server use.
+registry:
+  server: localhost:5555
+
+# Build from the files in this folder as they are, so a deploy does not need a
+# commit first.
+builder:
+  arch: amd64
+  context: .
