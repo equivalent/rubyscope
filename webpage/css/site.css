@@ -17,17 +17,18 @@
 }
 
 :root {
-  /* Cool paper, like a page under a desk lamp. The screenshots are dark, so the page is not. */
-  --paper: #e8ebf1;
-  --paper-2: #dfe3eb;
-  --ink: #161a2b;
-  --ink-2: #4d546d;
-  --rule: #c5cbd8;
+  color-scheme: dark;
+  /* A dark page, a little darker than the Tokyo Night screenshots, so they still stand out. */
+  --paper: #0f1018;
+  --paper-2: #1a1c29;
+  --ink: #e4e7f2;
+  --ink-2: #9aa1bd;
+  --rule: #2c3046;
   /* The red of the app icon. */
   --ruby: #c2183d;
   --ruby-bright: #e8254a;
   /* The underline the app draws under a name you can click. */
-  --link: #2f55c9;
+  --link: #7aa2f7;
   /* Tokyo Night, the background of the screenshots. */
   --night: #1a1b26;
   --night-2: #16161e;
@@ -47,8 +48,8 @@
 
   --wrap: 1240px;
   --gutter: clamp(1.25rem, 4vw, 3rem);
-  --shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 30px 60px -30px rgb(22 26 43 / 0.55),
-    0 12px 24px -12px rgb(22 26 43 / 0.35);
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 30px 60px -30px rgb(0 0 0 / 0.8),
+    0 12px 24px -12px rgb(0 0 0 / 0.6);
 }
 
 *,
@@ -137,7 +138,7 @@ kbd {
   border: 1px solid var(--rule);
   border-bottom-width: 3px;
   border-radius: 6px;
-  background: #f7f8fb;
+  background: var(--paper-2);
   color: var(--ink);
   font-size: 0.78em;
   font-weight: 500;
@@ -192,7 +193,7 @@ pre .c {
   top: 0;
   z-index: 5;
   border-bottom: 1px solid transparent;
-  background: rgb(232 235 241 / 0.85);
+  background: rgb(15 16 24 / 0.85);
   backdrop-filter: saturate(1.4) blur(10px);
 }
 
