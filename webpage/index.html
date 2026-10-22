@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rubyscope: go to definition for Ruby and Rails code</title>
-  <meta name="description" content="A small desktop app for reading Ruby and Rails code. Ctrl+click a class, method, route helper, translation key or partial to open where it is defined. Linux and macOS.">
+  <title>Rubyscope: a code browser for Ruby on Rails</title>
+  <meta name="description" content="A small desktop app for reading Ruby and Rails code. Ctrl+click a class, method, route helper, translation key or partial to open where it is defined. Built in Rust, for Omarchy Linux and macOS.">
   <link rel="icon" href="img/icon.svg" type="image/svg+xml">
   <link rel="icon" href="img/icon-32.png" sizes="32x32">
   <link rel="preload" href="fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/site.css">
-  <meta property="og:title" content="rubyscope">
+  <meta property="og:title" content="Rubyscope: a code browser for Ruby on Rails">
   <meta property="og:description" content="Ctrl+click any name in a Rails app and land on the line that defines it.">
   <meta property="og:image" content="img/shots/hover.webp">
 </head>
@@ -18,7 +18,7 @@
 
   <header class="site-head">
     <div class="wrap">
-      <a class="brand" href="./"><img src="img/icon.svg" alt="" width="30" height="30">rubyscope</a>
+      <a class="brand" href="./"><img src="img/icon.svg" alt="" width="30" height="30">Rubyscope</a>
       <nav class="site-nav" aria-label="Main">
         <a class="wide" href="#features">Features</a>
         <a href="#install">Install</a>
@@ -32,18 +32,19 @@
     <section class="hero">
       <div class="wrap">
         <div class="hero-text">
-          <h1>Click a name in a Rails app. Land on the line that defines it.</h1>
+          <h1>A code browser for Ruby on Rails</h1>
           <div>
-            <p class="lede">rubyscope is a small desktop app for reading Ruby and Rails code. Hold Ctrl and click a class, a method, a route helper, a translation key or a partial. It opens where that thing is written.</p>
+            <p class="lede">Rubyscope is a small desktop app for reading Ruby and Rails code. Hold Ctrl and click a class, a method, a route helper, a translation key or a partial. It opens where that thing is written. Built in Rust, for Omarchy Linux and macOS.</p>
             <div class="actions">
-              <a class="button primary" href="#install">Install rubyscope</a>
+              <a class="button primary" href="#install">Install Rubyscope</a>
               <a class="button" href="docs/">Read the docs</a>
             </div>
           </div>
           <ul class="facts">
             <li>Starts in about one second</li>
             <li>Reads your code and never changes it</li>
-            <li>Linux and macOS</li>
+            <li>Built in Rust</li>
+            <li>Omarchy Linux and macOS</li>
             <li>Free and open source, MIT</li>
           </ul>
         </div>
@@ -51,11 +52,11 @@
         <figure class="demo" id="demo" data-state="start">
           <div class="demo-frame">
             <img src="img/shots/ctrl-hover.webp" data-for="start" width="2560" height="1520"
-                 alt="rubyscope with app/services/shipping.rb open. Ctrl is held and the class name Order has an underline.">
+                 alt="Rubyscope with app/services/shipping.rb open. Ctrl is held and the class name Order has an underline.">
             <img src="img/shots/class-definition.webp" data-for="class" width="2560" height="1520" hidden loading="lazy"
-                 alt="rubyscope after the click: app/models/order.rb is open at class Order.">
+                 alt="Rubyscope after the click: app/models/order.rb is open at class Order.">
             <img src="img/shots/method-definition.webp" data-for="method" width="2560" height="1520" hidden loading="lazy"
-                 alt="rubyscope after the click: app/models/order.rb is open at def ship!.">
+                 alt="Rubyscope after the click: app/models/order.rb is open at def ship!.">
 
             <button class="spot" data-for="start" data-go="class" style="left:25.7%;top:31.3%;width:4.1%;height:3.8%"
                     aria-label="Ctrl+click Order"><span class="tip">Ctrl+click Order</span></button>
@@ -67,7 +68,7 @@
           <figcaption class="demo-bar">
             <p data-for="start"><strong>Try it.</strong> This is a real screenshot. Ctrl is held, so <code>Order</code> has an underline. Click it, or click <code>ship!</code> lower down.</p>
             <p data-for="class" hidden><strong>app/models/order.rb, line 2.</strong> The click found the class through Ruby's constant lookup. Use the back button in the top bar to return.</p>
-            <p data-for="method" hidden><strong>Order#ship!, line 22.</strong> rubyscope knew that <code>order</code> is an <code>Order</code>, because it comes from <code>Order.ready_to_ship.find_each</code>.</p>
+            <p data-for="method" hidden><strong>Order#ship!, line 22.</strong> Rubyscope knew that <code>order</code> is an <code>Order</code>, because it comes from <code>Order.ready_to_ship.find_each</code>.</p>
             <button class="demo-reset" type="button" data-go="start" hidden>Start again</button>
           </figcaption>
         </figure>
@@ -78,13 +79,13 @@
       <div class="wrap">
         <div class="section-head">
           <h2>Go to definition that knows Rails</h2>
-          <p>A text search finds every <code>ship!</code> in the project. rubyscope finds the one you mean. It follows Ruby's lookup rules and the conventions of Rails, RSpec, FactoryBot and Stimulus.</p>
+          <p>A text search finds every <code>ship!</code> in the project. Rubyscope finds the one you mean. It follows Ruby's lookup rules and the conventions of Rails, RSpec, FactoryBot and Stimulus.</p>
         </div>
 
         <article class="feature">
           <div class="feature-text">
             <h3>Methods, and the type behind them</h3>
-            <p>Rest the pointer on a name to see its signature, its docs and where it is defined. The popup also says how rubyscope found the type: exact, inferred, a guess, or by name only.</p>
+            <p>Rest the pointer on a name to see its signature, its docs and where it is defined. The popup also says how Rubyscope found the type: exact, inferred, a guess, or by name only.</p>
             <ul>
               <li>Method lookup in Ruby's order: prepends, the class, includes, the superclass</li>
               <li>Concerns, <code>class_methods</code>, <code>delegate</code>, <code>super</code></li>
@@ -165,7 +166,7 @@
         <article class="feature">
           <div class="feature-text">
             <h3>When a name means several things</h3>
-            <p>Some calls have no known receiver, such as a method on a block argument. rubyscope then lists every definition with that name, and says how sure it is about each one. It never guesses in silence.</p>
+            <p>Some calls have no known receiver, such as a method on a block argument. Rubyscope then lists every definition with that name, and says how sure it is about each one. It never guesses in silence.</p>
           </div>
           <div class="shots">
             <figure class="shot narrow">
@@ -215,7 +216,7 @@
       <div class="wrap">
         <div class="section-head">
           <h2>What a click understands</h2>
-          <p>rubyscope reads the source. It does not boot Rails or run your code, so it works on an app that does not start.</p>
+          <p>Rubyscope reads the source. It does not boot Rails or run your code, so it works on an app that does not start.</p>
         </div>
         <dl class="understands">
           <div><dt>Constants</dt><dd>Lexical scopes, ancestors, <code>class A::B</code>, constant aliases and Zeitwerk folder namespaces.</dd></div>
@@ -237,7 +238,7 @@
         <div class="cols">
           <div>
             <h3>About one second to start</h3>
-            <p>rubyscope parses every Ruby file with Prism, on all CPU cores, and saves the index. The next start reads the saved index and parses only the files that changed.</p>
+            <p>Rubyscope parses every Ruby file with Prism, on all CPU cores, and saves the index. The next start reads the saved index and parses only the files that changed.</p>
           </div>
           <div>
             <h3>Stays up to date</h3>
@@ -245,7 +246,7 @@
           </div>
           <div>
             <h3>Reads only</h3>
-            <p>rubyscope never writes into your project. To change a file, open it in your editor from the right-click menu, at the same line.</p>
+            <p>Rubyscope never writes into your project. To change a file, open it in your editor from the right-click menu, at the same line.</p>
           </div>
         </div>
       </div>
@@ -255,7 +256,7 @@
       <div class="wrap">
         <div class="section-head">
           <h2>Install</h2>
-          <p>rubyscope is built from source with Rust 1.88 or newer, clang and libclang.</p>
+          <p>Rubyscope is built from source with Rust 1.88 or newer, clang and libclang.</p>
         </div>
         <div class="install">
           <div>
@@ -264,7 +265,7 @@
 cd rubyscope
 bin/install
 rubyscope ~/code/shop</code></pre>
-            <p>Installs the app in <code>~/.local/bin</code> with an app launcher entry. Built and used on Wayland.</p>
+            <p>Installs the app in <code>~/.local/bin</code> with an app launcher entry. Built and used on Omarchy, on Wayland.</p>
           </div>
           <div>
             <h3>macOS</h3>
@@ -282,7 +283,7 @@ rubyscope ~/code/shop</code></pre>
 
   <footer class="site-foot">
     <div class="wrap">
-      <p>rubyscope is open source under the MIT license.</p>
+      <p>Rubyscope is open source under the MIT license.</p>
       <nav aria-label="Footer">
         <a href="docs/">Docs</a>
         <a href="https://github.com/equivalent/rubyscope">GitHub</a>

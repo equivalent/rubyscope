@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Docs: how to use rubyscope, mouse and keys</title>
-  <meta name="description" content="How to install and use rubyscope: open a project, go to definitions, find usages, git blame, every mouse action and keyboard shortcut, and how to change the keys.">
+  <title>Docs: how to use Rubyscope, mouse and keys</title>
+  <meta name="description" content="How to install and use Rubyscope: open a project, go to definitions, find usages, git blame, every mouse action and keyboard shortcut, and how to change the keys.">
   <link rel="icon" href="../img/icon.svg" type="image/svg+xml">
   <link rel="icon" href="../img/icon-32.png" sizes="32x32">
   <link rel="preload" href="../fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
@@ -15,7 +15,7 @@
 
   <header class="site-head">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../img/icon.svg" alt="" width="30" height="30">rubyscope</a>
+      <a class="brand" href="../"><img src="../img/icon.svg" alt="" width="30" height="30">Rubyscope</a>
       <nav class="site-nav" aria-label="Main">
         <a class="wide" href="../#features">Features</a>
         <a href="../#install">Install</a>
@@ -41,7 +41,7 @@
         <li><a href="#clicks">What a click understands</a></li>
         <li><a href="#index">The saved index</a></li>
         <li><a href="#limits">Limits</a></li>
-        <li><a href="#files">Files rubyscope writes</a></li>
+        <li><a href="#files">Files Rubyscope writes</a></li>
         <li><a href="#env">Environment variables</a></li>
         <li><a href="#troubleshooting">Troubleshooting</a></li>
         <li><a href="#cli">Command-line tool</a></li>
@@ -49,8 +49,8 @@
     </nav>
 
     <main id="main" class="doc">
-      <h1>Using rubyscope</h1>
-      <p class="lede">rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl and click a name to go to its definition. This page lists everything you can do with it.</p>
+      <h1>Using Rubyscope</h1>
+      <p class="lede">Rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl and click a name to go to its definition. This page lists everything you can do with it.</p>
 
       <div class="note">
         <p>On macOS, use <kbd>Cmd</kbd> where this page says <kbd>Ctrl</kbd>. Three keys stay on Ctrl: <kbd>Ctrl</kbd> <kbd>Tab</kbd>, because Cmd+Tab switches apps, and <kbd>Ctrl</kbd> <kbd>D</kbd> and <kbd>Ctrl</kbd> <kbd>U</kbd>, as in Vim.</p>
@@ -66,12 +66,12 @@ bin/install</code></pre>
         <p>This builds the release binaries and installs <code>rubyscope</code> and <code>rubyscope-cli</code> in <code>~/.local/bin</code>, an app launcher entry and the icon. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>.</p>
         <h3>macOS</h3>
 <pre><code>bin/install-macos</code></pre>
-        <p>This installs <code>~/Applications/rubyscope.app</code>, which you can open from Spotlight or the Dock, and a link to it in <code>~/.local/bin</code>. An app started from the Dock gets only the system <code>PATH</code>, so rubyscope reads the <code>PATH</code> of your login shell when it starts.</p>
+        <p>This installs <code>~/Applications/rubyscope.app</code>, which you can open from Spotlight or the Dock, and a link to it in <code>~/.local/bin</code>. An app started from the Dock gets only the system <code>PATH</code>, so Rubyscope reads the <code>PATH</code> of your login shell when it starts.</p>
         <h3>Optional tools</h3>
         <table>
           <thead><tr><th scope="col">Tool</th><th scope="col">What it gives</th></tr></thead>
           <tbody>
-            <tr><td><code>ruby</code></td><td>Gems and the standard library in the index. rubyscope asks mise or rbenv for the Ruby of the project, else it uses the <code>ruby</code> on <code>PATH</code>.</td></tr>
+            <tr><td><code>ruby</code></td><td>Gems and the standard library in the index. Rubyscope asks mise or rbenv for the Ruby of the project, else it uses the <code>ruby</code> on <code>PATH</code>.</td></tr>
             <tr><td><code>bundle install</code></td><td>Clicks that go into gem source. Only installed gems are indexed.</td></tr>
             <tr><td><code>git</code></td><td>Git blame and "Open on GitHub".</td></tr>
             <tr><td><code>gh</code></td><td>A click on a blame block opens the pull request of the commit, not only the commit.</td></tr>
@@ -88,9 +88,9 @@ rubyscope ~/code/shop/app/models/order.rb:40      <span class="c"># open a file 
 rubyscope                                         <span class="c"># the current folder, or the start screen</span></code></pre>
         <ul>
           <li>With a file and no folder, the project is the nearest parent folder that has <code>.git</code> or a <code>Gemfile</code>.</li>
-          <li>With no arguments, rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your recent projects.</li>
+          <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your recent projects.</li>
           <li><kbd>Ctrl</kbd> <kbd>O</kbd> opens the system folder dialog. When a project is already open, the new one opens in a new window.</li>
-          <li>rubyscope remembers the open tabs of each project and opens them again next time.</li>
+          <li>Rubyscope remembers the open tabs of each project and opens them again next time.</li>
         </ul>
       </section>
 
@@ -99,17 +99,17 @@ rubyscope                                         <span class="c"># the current 
         <ol>
           <li>Open a project. The index builds in the background, and the top bar shows "indexing…" and then the number of files. The first index of a large app takes a few seconds. The next start takes about one second.</li>
           <li>Open a file. Press <kbd>Ctrl</kbd> <kbd>P</kbd> and type part of the path, or click it in the file tree. Press <kbd>Ctrl</kbd> <kbd>T</kbd> to find a class, module, method or constant by name.</li>
-          <li>Hold <kbd>Ctrl</kbd>. The names you can click get an underline. Click one to go to its definition. When there are several, rubyscope shows a list. When a class is opened in many files, it goes to the main file and tells you how many there are.</li>
+          <li>Hold <kbd>Ctrl</kbd>. The names you can click get an underline. Click one to go to its definition. When there are several, Rubyscope shows a list. When a class is opened in many files, it goes to the main file and tells you how many there are.</li>
           <li>Go back with the mouse back button or the back button in the top bar. The forward button goes forward again.</li>
           <li>Right-click a name and choose "Find usages". The results panel opens at the bottom. For a method, the "callers" button on a row shows who calls the method around that row.</li>
-          <li>Rest the pointer on a name for half a second. A popup shows the signature, the docs, where it is defined, the type rubyscope found and how sure it is.</li>
+          <li>Rest the pointer on a name for half a second. A popup shows the signature, the docs, where it is defined, the type Rubyscope found and how sure it is.</li>
           <li>Press <kbd>Ctrl</kbd> <kbd>B</kbd> to show git blame. Newer commits get a stronger blue. Click a blame line to open the commit, or its pull request, on GitHub.</li>
           <li>Press <kbd>Ctrl</kbd> <kbd>K</kbd> to see every command.</li>
         </ol>
         <figure class="shot">
           <img src="../img/shots/hover.webp" width="1658" height="960" loading="lazy"
                alt="The hover popup over order.ship! with the method, its file and line, and its docs.">
-          <figcaption>The hover popup on a method call. "inferred" means rubyscope worked out the type of <code>order</code> from the code around it.</figcaption>
+          <figcaption>The hover popup on a method call. "inferred" means Rubyscope worked out the type of <code>order</code> from the code around it.</figcaption>
         </figure>
       </section>
 
@@ -239,7 +239,7 @@ rubyscope                                         <span class="c"># the current 
 
       <section id="change-keys">
         <h2>Change the keys</h2>
-        <p>Put your keys in <code>~/.config/rubyscope/keys.toml</code>. A key in this file replaces the default key of that command. The other commands keep their defaults. rubyscope reads the file when it starts.</p>
+        <p>Put your keys in <code>~/.config/rubyscope/keys.toml</code>. A key in this file replaces the default key of that command. The other commands keep their defaults. Rubyscope reads the file when it starts.</p>
 <pre><code>toggle_blame = "cmd+alt+b"
 find_usages = "alt+u"
 back = "alt+left"
@@ -287,22 +287,22 @@ reindex = "f5"</code></pre>
         <figure class="shot narrow">
           <img src="../img/shots/choose.webp" width="982" height="576" loading="lazy"
                alt="A list titled Choose a definition of ship!, with Order#ship! and GiftCard#ship!.">
-          <figcaption>When the receiver is not known, rubyscope lists every method with that name.</figcaption>
+          <figcaption>When the receiver is not known, Rubyscope lists every method with that name.</figcaption>
         </figure>
       </section>
 
       <section id="index">
         <h2>The saved index</h2>
-        <p>rubyscope lists the project files and respects <code>.gitignore</code>. It reads <code>Gemfile.lock</code> and asks the project's Ruby where the gems and the standard library are. It parses every Ruby file with Prism on all CPU cores, joins the files into one table, and adds the Rails, RSpec, FactoryBot and Stimulus rules.</p>
-        <p>The result is saved in <code>~/.cache/rubyscope/</code>, or in <code>$XDG_CACHE_HOME/rubyscope/</code>. At the next start rubyscope parses only the files whose size or change time is different. For a large Rails app with its gems, the index is ready in less than a second with the saved index, and in a few seconds without it.</p>
+        <p>Rubyscope lists the project files and respects <code>.gitignore</code>. It reads <code>Gemfile.lock</code> and asks the project's Ruby where the gems and the standard library are. It parses every Ruby file with Prism on all CPU cores, joins the files into one table, and adds the Rails, RSpec, FactoryBot and Stimulus rules.</p>
+        <p>The result is saved in <code>~/.cache/rubyscope/</code>, or in <code>$XDG_CACHE_HOME/rubyscope/</code>. At the next start Rubyscope parses only the files whose size or change time is different. For a large Rails app with its gems, the index is ready in less than a second with the saved index, and in a few seconds without it.</p>
         <p>While the window is open, a file watcher sees changes in <code>app/</code>, <code>config/</code>, <code>db/</code>, <code>lib/</code>, <code>spec/</code>, <code>test/</code>, <code>Gemfile</code> and <code>Gemfile.lock</code>. Open tabs load the new text and the index builds again from the changed files.</p>
-        <p>The saved index is not used after a new build of rubyscope with new parse rules, or when <code>config/initializers/inflections.rb</code> changed. "Index the project again" in <kbd>Ctrl</kbd> <kbd>K</kbd> parses every file and writes a new saved index.</p>
+        <p>The saved index is not used after a new build of Rubyscope with new parse rules, or when <code>config/initializers/inflections.rb</code> changed. "Index the project again" in <kbd>Ctrl</kbd> <kbd>K</kbd> parses every file and writes a new saved index.</p>
       </section>
 
       <section id="limits">
         <h2>Limits</h2>
         <ul>
-          <li>Methods with names that exist only at runtime, such as <code>define_method</code> with a variable name, <code>method_missing</code> or <code>class_eval</code> with a string, cannot be found by reading the code. For these, rubyscope lists the methods with that name.</li>
+          <li>Methods with names that exist only at runtime, such as <code>define_method</code> with a variable name, <code>method_missing</code> or <code>class_eval</code> with a string, cannot be found by reading the code. For these, Rubyscope lists the methods with that name.</li>
           <li>Some variable types are guesses. The hover always says when a type is a guess.</li>
           <li>RBS signatures for core classes are not read yet. <code>"x".strip</code> gives a name-only list, because <code>String</code> is written in C.</li>
           <li>Custom Zeitwerk setups are read from the initializers only.</li>
@@ -311,8 +311,8 @@ reindex = "f5"</code></pre>
       </section>
 
       <section id="files">
-        <h2>Files rubyscope writes</h2>
-        <p>rubyscope never writes into the project folder.</p>
+        <h2>Files Rubyscope writes</h2>
+        <p>Rubyscope never writes into the project folder.</p>
         <table>
           <thead><tr><th scope="col">Path</th><th scope="col">What it holds</th></tr></thead>
           <tbody>
@@ -340,12 +340,12 @@ reindex = "f5"</code></pre>
         <table>
           <thead><tr><th scope="col">Problem</th><th scope="col">What to do</th></tr></thead>
           <tbody>
-            <tr><td class="wrap-ok">A click goes to an old line, or a new method is not found</td><td>Press <kbd>Ctrl</kbd> <kbd>K</kbd> and choose "Index the project again". If that does not help, close rubyscope and delete <code>~/.cache/rubyscope/</code>.</td></tr>
+            <tr><td class="wrap-ok">A click goes to an old line, or a new method is not found</td><td>Press <kbd>Ctrl</kbd> <kbd>K</kbd> and choose "Index the project again". If that does not help, close Rubyscope and delete <code>~/.cache/rubyscope/</code>.</td></tr>
             <tr><td class="wrap-ok">A click on a gem or a Rails method does nothing</td><td>Run <code>ruby -v</code> and <code>bundle install</code> in the project folder. Only gems installed for the project's Ruby are indexed.</td></tr>
             <tr><td class="wrap-ok">Blame does not show</td><td>The project must be a git repository, and <code>git</code> must be on <code>PATH</code>.</td></tr>
             <tr><td class="wrap-ok">"This project has no GitHub remote"</td><td>The <code>origin</code> remote must be on github.com.</td></tr>
             <tr><td class="wrap-ok">A blame click opens the commit, not the pull request</td><td>Install the GitHub CLI, <code>gh</code>, and log in.</td></tr>
-            <tr><td class="wrap-ok">You want to see what the index does</td><td>Start rubyscope from a terminal. It prints a line such as <code>indexed 9000 files in 0.71 s</code>.</td></tr>
+            <tr><td class="wrap-ok">You want to see what the index does</td><td>Start Rubyscope from a terminal. It prints a line such as <code>indexed 9000 files in 0.71 s</code>.</td></tr>
           </tbody>
         </table>
       </section>
@@ -371,14 +371,14 @@ rubyscope-cli -r ~/code/shop ancestors ApplicationRecord</code></pre>
             <tr><td><code>--no-cache</code></td><td>Do not read or write the saved index</td></tr>
           </tbody>
         </table>
-        <p>To compare rubyscope with a booted Rails app, run <code>probe/rails_probe.rb</code> inside the app with <code>bin/rails runner</code>, then <code>rubyscope-cli check</code> on the JSON file it writes. See the <a href="https://github.com/equivalent/rubyscope#checking-against-booted-rails">README</a> for details.</p>
+        <p>To compare Rubyscope with a booted Rails app, run <code>probe/rails_probe.rb</code> inside the app with <code>bin/rails runner</code>, then <code>rubyscope-cli check</code> on the JSON file it writes. See the <a href="https://github.com/equivalent/rubyscope#checking-against-booted-rails">README</a> for details.</p>
       </section>
     </main>
   </div>
 
   <footer class="site-foot">
     <div class="wrap">
-      <p>rubyscope is open source under the MIT license.</p>
+      <p>Rubyscope is open source under the MIT license.</p>
       <nav aria-label="Footer">
         <a href="../">Home</a>
         <a href="https://github.com/equivalent/rubyscope">GitHub</a>
