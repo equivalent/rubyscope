@@ -1217,6 +1217,18 @@ fn the_diff_button_turns_diff_mode_on_and_off() {
 }
 
 #[test]
+fn diff_mode_does_not_move_the_window_content() {
+    let root = diff_fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    let before = h.get_by_label("Files").rect();
+    h.get_by_label("Diff").click();
+    wait_for_diff(&mut h);
+    h.get_by_label_contains("Diff: main");
+    assert_eq!(h.get_by_label("Files").rect(), before);
+}
+
+#[test]
 fn diff_mode_outside_git_says_so() {
     let root = fixture_named("nogit");
     std::fs::create_dir_all(root.join("app/models")).unwrap();

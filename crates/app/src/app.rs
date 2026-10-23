@@ -1455,10 +1455,13 @@ impl App {
     fn diff_pill(&self, ui: &mut egui::Ui) -> bool {
         let theme = &self.theme;
         let mut job = egui::text::LayoutJob::default();
-        let font = egui::FontId::proportional(13.5);
-        let mono = egui::FontId::monospace(12.5);
+        // The size of the other buttons, and their line height, so the top
+        // bar does not grow when the pill shows.
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let mono = egui::FontId::monospace(font.size);
+        let line_height = Some(ui.fonts_mut(|f| f.row_height(&font)));
         let mut add = |text: &str, color: Color32, font: &egui::FontId| {
-            job.append(text, 0.0, egui::TextFormat { font_id: font.clone(), color, ..Default::default() });
+            job.append(text, 0.0, egui::TextFormat { font_id: font.clone(), color, line_height, ..Default::default() });
         };
         add("Diff: ", theme.fg_dim, &font);
         match &self.repo {
@@ -1483,8 +1486,12 @@ impl App {
                 }
             }
         }
-        let button = egui::Button::new(job).fill(theme.bg_light).stroke(egui::Stroke::new(1.0, theme.muted));
+        let button = egui::Button::new(job).fill(theme.bg_light);
         let r = ui.add(button).on_hover_ui(|ui| self.diff_legend(ui));
+        // The border is painted on top: a button stroke makes the button,
+        // and so the top bar, a pixel taller.
+        let radius = ui.style().visuals.widgets.inactive.corner_radius;
+        ui.painter().rect_stroke(r.rect, radius, egui::Stroke::new(1.0, theme.muted), egui::StrokeKind::Inside);
         r.clicked()
     }
 
