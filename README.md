@@ -129,9 +129,9 @@ rubyscope                                            # see below
    Rest the pointer on a blame line to see the commit. Click it to open the commit, or its pull request, on GitHub.
 8. Press Ctrl+K to see all commands. Some commands have no key, for example
    "Index the project again" and "Open in editor".
-9. Press Ctrl+Shift+D for diff mode: what your branch changed, as in a pull
-   request, and what is not committed yet. Press ] and [ to go from change
-   to change. See "Diff mode" below.
+9. Press Ctrl+Shift+D (or click Diff at the top right) for diff mode: what
+   your branch changed, as in a pull request, and what is not committed yet.
+   Press ] and [ to go from change to change. See "Diff mode" below.
 
 ## The window
 
@@ -278,8 +278,9 @@ The names of the commands that have a default key:
 
 ## Diff mode
 
-Press Ctrl+Shift+D (or choose "Toggle diff mode" in Ctrl+K). The code view
-shows what your branch changed and what is not committed yet:
+Press Ctrl+Shift+D, click the Diff button at the top right, or choose
+"Toggle diff mode" in Ctrl+K. The button is blue while diff mode is on. The
+code view shows what your branch changed and what is not committed yet:
 
 | Color | What it is |
 |---|---|

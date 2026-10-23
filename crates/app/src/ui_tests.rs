@@ -1194,6 +1194,29 @@ fn blame_and_diff_together() {
 }
 
 #[test]
+fn the_diff_button_turns_diff_mode_on_and_off() {
+    let root = diff_fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    h.get_by_label("Diff").click();
+    wait_for_diff(&mut h);
+    assert!(h.state().show_diff);
+    assert!(h.state().current().unwrap().rows.is_some());
+    shot(&mut h, "49-diff-button-on");
+    // The button and the key work together.
+    press(&mut h, CMD | Modifiers::SHIFT, Key::D);
+    assert!(!h.state().show_diff);
+    h.get_by_label("Diff").click();
+    wait_for_diff(&mut h);
+    assert!(h.state().show_diff);
+    h.get_by_label("Diff").click();
+    h.run();
+    assert!(!h.state().show_diff);
+    assert!(h.state().current().unwrap().rows.is_none());
+    shot(&mut h, "49-diff-button-off");
+}
+
+#[test]
 fn diff_mode_outside_git_says_so() {
     let root = fixture_named("nogit");
     std::fs::create_dir_all(root.join("app/models")).unwrap();

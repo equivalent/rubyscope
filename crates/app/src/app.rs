@@ -1424,6 +1424,18 @@ impl App {
                     if ui.button("Commands").on_hover_text(format!("{}+K", keys::CMD)).clicked() {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }
+                    if self.root.is_some() {
+                        let key = self.keys.shortcut(Action::ToggleDiff).map(|s| s.label()).unwrap_or_default();
+                        let hint = if self.show_diff { "Hide the diff" } else { "Show the diff" };
+                        let button = if self.show_diff {
+                            egui::Button::new(RichText::new("Diff").color(theme.bg_dark).strong()).fill(theme.accent)
+                        } else {
+                            egui::Button::new("Diff")
+                        };
+                        if ui.add(button).on_hover_text(format!("{hint} ({key})")).clicked() {
+                            self.toggle_diff();
+                        }
+                    }
                     let busy = self.worker.building.load(std::sync::atomic::Ordering::SeqCst);
                     if busy {
                         ui.spinner();
