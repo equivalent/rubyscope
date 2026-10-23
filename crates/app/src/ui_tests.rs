@@ -805,6 +805,31 @@ fn wheel_scrolls_fast_and_shift_wheel_scrolls_a_page() {
     assert_eq!(t(&h).0.y, 2.0 * page);
 }
 
+#[test]
+fn wheel_scrolls_the_side_bar_faster_than_egui_does() {
+    let root = fixture();
+    for n in 0..100 {
+        std::fs::write(root.join(format!("note_{n:03}.rb")), "").unwrap();
+    }
+    let mut h = harness(&root);
+    let y = |h: &Harness<'static, App>| h.get_by_label("note_050.rb").rect().min.y;
+    let before = y(&h);
+    let pos = Pos2::new(100.0, 400.0);
+    h.event(Event::PointerMoved(pos));
+    let _ = h.run_ok();
+    h.event(Event::MouseWheel {
+        unit: eframe::egui::MouseWheelUnit::Line,
+        delta: Vec2::new(0.0, -1.0),
+        phase: eframe::egui::TouchPhase::Move,
+        source: eframe::egui::MouseWheelSource::Wheel,
+        modifiers: Modifiers::NONE,
+    });
+    settle(&mut h);
+    // egui scrolls 40 points for one wheel step; the side bar scrolls 2.5 times that.
+    let moved = before - y(&h);
+    assert!((moved - 100.0).abs() < 1.0, "moved {moved}");
+}
+
 // ----- Diff mode -----
 
 const ORDER_RELEASE: &str = "\

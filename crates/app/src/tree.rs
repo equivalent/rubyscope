@@ -8,6 +8,10 @@ use eframe::egui::{self, RichText};
 use crate::diff::FileMark;
 use crate::theme::Theme;
 
+/// The mouse wheel scrolls the side bar this many times faster than
+/// egui's default.
+pub const SIDEBAR_WHEEL_SPEED: f32 = 2.5;
+
 #[derive(Debug, Default)]
 pub struct Dir {
     pub dirs: BTreeMap<String, Dir>,
@@ -73,9 +77,13 @@ impl FileTree {
             })
             .unwrap_or_default();
         let ctx = Ctx { theme, current, project, marks, changed_dirs: &changed_dirs };
-        egui::ScrollArea::both().auto_shrink([false, false]).id_salt("tree").show(ui, |ui| {
-            dir_ui(ui, &ctx, root, "", 0, open, reveal, &mut clicked);
-        });
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .id_salt("tree")
+            .wheel_scroll_multiplier(egui::Vec2::splat(SIDEBAR_WHEEL_SPEED))
+            .show(ui, |ui| {
+                dir_ui(ui, &ctx, root, "", 0, open, reveal, &mut clicked);
+            });
         clicked
     }
 }

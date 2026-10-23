@@ -201,7 +201,8 @@ These keys scroll the code when no text field has focus:
 | 0 | Scroll to the left edge |
 | ] / [, Alt+↓ / Alt+↑ | Diff mode: next / previous change |
 
-The mouse wheel scrolls 3 times faster than the egui default.
+The mouse wheel scrolls the code 8 times faster than the egui default, and
+the side bar 2.5 times faster.
 
 ### Commands without a key
 

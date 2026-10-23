@@ -1906,32 +1906,35 @@ impl App {
                             return;
                         };
                         let mut go = None;
-                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                            for item in index.outline(file) {
-                                let (icon, color) = match item.kind {
-                                    OutlineKind::Class => ("C", theme.yellow),
-                                    OutlineKind::Module => ("M", theme.cyan),
-                                    OutlineKind::Method => ("m", theme.blue),
-                                    OutlineKind::SingletonMethod => ("s", theme.blue),
-                                    OutlineKind::Constant => ("k", theme.orange),
-                                    OutlineKind::Generated => ("g", theme.fg_dim),
-                                };
-                                let r = ui
-                                    .horizontal(|ui| {
-                                        ui.add_space(item.depth as f32 * 12.0);
-                                        ui.label(RichText::new(icon).color(color).monospace());
-                                        ui.add(
-                                            egui::Label::new(RichText::new(&item.label).color(theme.fg))
-                                                .sense(egui::Sense::click())
-                                                .truncate(),
-                                        )
-                                    })
-                                    .inner;
-                                if r.clicked() {
-                                    go = Some(item.name_span.start);
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .wheel_scroll_multiplier(egui::Vec2::splat(tree::SIDEBAR_WHEEL_SPEED))
+                            .show(ui, |ui| {
+                                for item in index.outline(file) {
+                                    let (icon, color) = match item.kind {
+                                        OutlineKind::Class => ("C", theme.yellow),
+                                        OutlineKind::Module => ("M", theme.cyan),
+                                        OutlineKind::Method => ("m", theme.blue),
+                                        OutlineKind::SingletonMethod => ("s", theme.blue),
+                                        OutlineKind::Constant => ("k", theme.orange),
+                                        OutlineKind::Generated => ("g", theme.fg_dim),
+                                    };
+                                    let r = ui
+                                        .horizontal(|ui| {
+                                            ui.add_space(item.depth as f32 * 12.0);
+                                            ui.label(RichText::new(icon).color(color).monospace());
+                                            ui.add(
+                                                egui::Label::new(RichText::new(&item.label).color(theme.fg))
+                                                    .sense(egui::Sense::click())
+                                                    .truncate(),
+                                            )
+                                        })
+                                        .inner;
+                                    if r.clicked() {
+                                        go = Some(item.name_span.start);
+                                    }
                                 }
-                            }
-                        });
+                            });
                         if let (Some(at), Some(path)) = (go, self.current().map(|t| t.path.clone())) {
                             self.open_path(&path, Some(at), None, true);
                         }
@@ -1954,65 +1957,69 @@ impl App {
         }
         let current = self.current().map(|t| t.rel.clone());
         let mut open = None;
-        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("changes").show(ui, |ui| {
-            let section = |ui: &mut egui::Ui, left: &str, right: String| {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(left.to_uppercase()).color(theme.fg_dim).small());
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(right).color(theme.fg_dim).small());
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .id_salt("changes")
+            .wheel_scroll_multiplier(egui::Vec2::splat(tree::SIDEBAR_WHEEL_SPEED))
+            .show(ui, |ui| {
+                let section = |ui: &mut egui::Ui, left: &str, right: String| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(left.to_uppercase()).color(theme.fg_dim).small());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(RichText::new(right).color(theme.fg_dim).small());
+                        });
                     });
-                });
-            };
-            let row = |ui: &mut egui::Ui, f: &crate::diff::ChangedFile, uncommitted: bool| -> bool {
-                let (dir, name) = split_path(&f.rel);
-                let gone = f.status == 'D';
-                ui.horizontal(|ui| {
-                    let (mark, color) = match (uncommitted, f.status) {
-                        (true, 'D') => ("D", theme.red),
-                        (true, _) => ("●", theme.yellow),
-                        (false, 'A') => ("A", theme.green),
-                        (false, 'D') => ("D", theme.red),
-                        _ => ("M", theme.blue),
-                    };
-                    ui.label(RichText::new(mark).color(color).monospace().small());
-                    let selected = current.as_deref() == Some(f.rel.as_str());
-                    let text = RichText::new(name).color(if gone { theme.fg_dim } else { theme.fg });
-                    let text = if selected { text.background_color(theme.selection) } else { text };
-                    let r = ui.add(egui::Label::new(text).sense(egui::Sense::click())).on_hover_text(&f.rel);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(format!("−{}", f.removed)).color(theme.red).monospace().small());
-                        ui.label(RichText::new(format!("+{}", f.added)).color(theme.green).monospace().small());
-                        ui.add(egui::Label::new(RichText::new(dir).color(theme.fg_dim).small()).truncate());
-                    });
-                    r.clicked() && !gone
-                })
-                .inner
-            };
-            section(ui, "On the branch", format!("vs {}", repo.base));
-            if repo.branch_files.is_empty() {
-                let why = if repo.base_missing {
-                    "No base branch. Choose one with \"Diff against branch…\"."
-                } else {
-                    "No commits on the branch since the merge-base."
                 };
-                ui.label(RichText::new(why).color(theme.fg_dim).small());
-            }
-            for f in &repo.branch_files {
-                if row(ui, f, false) {
-                    open = Some(f.rel.clone());
+                let row = |ui: &mut egui::Ui, f: &crate::diff::ChangedFile, uncommitted: bool| -> bool {
+                    let (dir, name) = split_path(&f.rel);
+                    let gone = f.status == 'D';
+                    ui.horizontal(|ui| {
+                        let (mark, color) = match (uncommitted, f.status) {
+                            (true, 'D') => ("D", theme.red),
+                            (true, _) => ("●", theme.yellow),
+                            (false, 'A') => ("A", theme.green),
+                            (false, 'D') => ("D", theme.red),
+                            _ => ("M", theme.blue),
+                        };
+                        ui.label(RichText::new(mark).color(color).monospace().small());
+                        let selected = current.as_deref() == Some(f.rel.as_str());
+                        let text = RichText::new(name).color(if gone { theme.fg_dim } else { theme.fg });
+                        let text = if selected { text.background_color(theme.selection) } else { text };
+                        let r = ui.add(egui::Label::new(text).sense(egui::Sense::click())).on_hover_text(&f.rel);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(RichText::new(format!("−{}", f.removed)).color(theme.red).monospace().small());
+                            ui.label(RichText::new(format!("+{}", f.added)).color(theme.green).monospace().small());
+                            ui.add(egui::Label::new(RichText::new(dir).color(theme.fg_dim).small()).truncate());
+                        });
+                        r.clicked() && !gone
+                    })
+                    .inner
+                };
+                section(ui, "On the branch", format!("vs {}", repo.base));
+                if repo.branch_files.is_empty() {
+                    let why = if repo.base_missing {
+                        "No base branch. Choose one with \"Diff against branch…\"."
+                    } else {
+                        "No commits on the branch since the merge-base."
+                    };
+                    ui.label(RichText::new(why).color(theme.fg_dim).small());
                 }
-            }
-            ui.add_space(8.0);
-            section(ui, "Not committed", "vs HEAD".into());
-            if repo.uncommitted_files.is_empty() {
-                ui.label(RichText::new("The working tree is clean.").color(theme.fg_dim).small());
-            }
-            for f in &repo.uncommitted_files {
-                if row(ui, f, true) {
-                    open = Some(f.rel.clone());
+                for f in &repo.branch_files {
+                    if row(ui, f, false) {
+                        open = Some(f.rel.clone());
+                    }
                 }
-            }
-        });
+                ui.add_space(8.0);
+                section(ui, "Not committed", "vs HEAD".into());
+                if repo.uncommitted_files.is_empty() {
+                    ui.label(RichText::new("The working tree is clean.").color(theme.fg_dim).small());
+                }
+                for f in &repo.uncommitted_files {
+                    if row(ui, f, true) {
+                        open = Some(f.rel.clone());
+                    }
+                }
+            });
         if let (Some(rel), Some(root)) = (open, self.root.clone()) {
             self.open_path(&root.join(rel), None, None, true);
         }
