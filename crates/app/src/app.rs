@@ -3,12 +3,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Pos2, RichText};
 use rubyscope_index::model::Span;
 use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Target};
 
+use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
 use crate::keys::{self, Action, Keymap};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
@@ -46,6 +47,8 @@ pub enum Bottom {
 enum SidebarTab {
     Files,
     Outline,
+    /// The changed files, in diff mode only.
+    Changes,
 }
 
 struct Choose {
@@ -107,6 +110,21 @@ pub struct App {
     toast: Option<(String, f64)>,
     title: String,
     started: Instant,
+    /// Diff mode: the branch and the working tree against a base branch.
+    pub show_diff: bool,
+    /// The repository status for diff mode, once it is read.
+    pub repo: Option<Arc<RepoStatus>>,
+    /// The base branch the user chose for this project (none: the default).
+    pub diff_base: Option<String>,
+    diff_marks: Arc<HashMap<String, FileMark>>,
+    /// `]` at the last change asks first, then opens the next file: the
+    /// direction of the first press.
+    diff_edge: i8,
+    /// `HEAD` and the base as commits, to see when they move.
+    diff_fingerprint: String,
+    diff_poll: Option<Instant>,
+    /// Say what diff mode compares when the status comes.
+    announce_diff: bool,
 }
 
 /// Lets the code view ask the index what is clickable in a file.
@@ -118,6 +136,26 @@ struct Links<'a> {
 impl Clickable for Links<'_> {
     fn clickable_at(&self, offset: u32) -> Option<Span> {
         self.index.clickable_at(self.file, offset)
+    }
+}
+
+/// Scrolls to a change, frames it, and puts the cursor on its first line.
+fn go_to_change(t: &mut OpenFile, c: usize) {
+    let Some(map) = t.rows.clone() else { return };
+    let Some(&(first, _)) = map.changes.get(c) else { return };
+    t.change = Some(c);
+    t.scroll_to_row = Some((first, 1.0 / 3.0));
+    t.cursor = Some(t.line_start(t.line_of_row(first)));
+}
+
+/// After `]` opened a file: its first change (or its last one for `[`),
+/// once its diff is there.
+fn apply_pending_change(t: &mut OpenFile) {
+    let Some(dir) = t.pending_change else { return };
+    let Some(map) = t.rows.clone() else { return };
+    t.pending_change = None;
+    if !map.changes.is_empty() {
+        go_to_change(t, if dir > 0 { 0 } else { map.changes.len() - 1 });
     }
 }
 
@@ -138,9 +176,42 @@ fn state_dir() -> Option<PathBuf> {
 }
 
 fn session_path(root: &Path) -> Option<PathBuf> {
-    let name: String =
-        root.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-    Some(state_dir()?.join(format!("session{name}.json")))
+    Some(state_dir()?.join(format!("session{}.json", state_name(root))))
+}
+
+/// A file name part for a project folder.
+fn state_name(root: &Path) -> String {
+    root.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
+}
+
+/// The base branch of diff mode for a project.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct DiffState {
+    base: Option<String>,
+}
+
+fn diff_state_path(root: &Path) -> Option<PathBuf> {
+    Some(state_dir()?.join(format!("diff{}.json", state_name(root))))
+}
+
+fn load_diff_base(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(diff_state_path(root)?).ok()?;
+    serde_json::from_str::<DiffState>(&text).ok()?.base
+}
+
+fn save_diff_base(root: &Path, base: Option<&str>) {
+    if let Some(p) = diff_state_path(root) {
+        let state = DiffState { base: base.map(String::from) };
+        let _ = std::fs::write(p, serde_json::to_string(&state).unwrap_or_default());
+    }
+}
+
+/// `app/models` and `order.rb` for `app/models/order.rb`.
+fn split_path(rel: &str) -> (&str, &str) {
+    match rel.rsplit_once('/') {
+        Some((dir, name)) => (dir, name),
+        None => ("", rel),
+    }
 }
 
 pub fn recent_projects() -> Vec<String> {
@@ -240,6 +311,14 @@ impl App {
             toast: None,
             title: String::new(),
             started: Instant::now(),
+            show_diff: false,
+            repo: None,
+            diff_base: None,
+            diff_marks: Arc::new(HashMap::new()),
+            diff_edge: 0,
+            diff_fingerprint: String::new(),
+            diff_poll: None,
+            announce_diff: false,
         };
         if let Some(root) = root {
             app.open_project(root);
@@ -264,6 +343,7 @@ impl App {
         self.worker.build(&root, worker::From::Saved);
         self.worker.watch(&root);
         self.root = Some(root.clone());
+        self.diff_base = load_diff_base(&root);
         if let Some(saved) = session_path(&root).and_then(|p| std::fs::read_to_string(p).ok())
             && let Ok(tabs) = serde_json::from_str::<Vec<(String, u32)>>(&saved)
         {
@@ -300,6 +380,15 @@ impl App {
         self.pending_changes.clear();
         self.last_change = None;
         self.picking_folder = false;
+        self.show_diff = false;
+        self.repo = None;
+        self.diff_base = None;
+        self.diff_marks = Arc::new(HashMap::new());
+        self.diff_edge = 0;
+        self.diff_fingerprint.clear();
+        if self.sidebar_tab == SidebarTab::Changes {
+            self.sidebar_tab = SidebarTab::Files;
+        }
     }
 
     /// Opens another project in this window.
@@ -323,6 +412,7 @@ impl App {
     pub fn open_prebuilt(&mut self, root: PathBuf, index: Arc<Index>) {
         self.tree = FileTree::new(&index.all_files);
         self.all_files = Arc::new(index.all_files.clone());
+        self.diff_base = load_diff_base(&root);
         self.root = Some(root);
         self.index = Some(index);
         self.index_status = "ready".into();
@@ -334,6 +424,12 @@ impl App {
         if let Some(p) = session_path(root) {
             let _ = std::fs::write(p, serde_json::to_string(&tabs).unwrap_or_default());
         }
+    }
+
+    /// The message at the bottom, if one shows (tests).
+    #[cfg(test)]
+    pub fn toast_text(&self) -> Option<String> {
+        self.toast.as_ref().map(|(t, _)| t.clone())
     }
 
     fn toast(&mut self, text: impl Into<String>) {
@@ -414,11 +510,295 @@ impl App {
         if self.root.as_ref().is_some_and(|r| path.starts_with(r)) {
             self.tree.reveal(&rel);
         }
+        if self.show_diff && self.tabs[idx].diff.is_none() {
+            self.request_diff(idx);
+        }
+        self.diff_edge = 0;
         if record {
             let line = target_line.unwrap_or(0);
             self.push_history(NavPoint { path: path.to_path_buf(), line });
         }
         self.save_session();
+    }
+
+    // ----- Diff mode -----
+
+    /// Turns diff mode on or off.
+    fn toggle_diff(&mut self) {
+        if self.root.is_none() {
+            return;
+        }
+        self.show_diff = !self.show_diff;
+        self.diff_edge = 0;
+        self.file_items = None;
+        for t in &mut self.tabs {
+            t.change = None;
+            t.pending_change = None;
+        }
+        if self.show_diff {
+            self.announce_diff = true;
+            self.refresh_repo();
+        } else {
+            if self.sidebar_tab == SidebarTab::Changes {
+                self.sidebar_tab = SidebarTab::Files;
+            }
+            self.toast("Diff mode off");
+        }
+        let on = self.show_diff;
+        for t in &mut self.tabs {
+            t.set_rows(on);
+        }
+    }
+
+    /// Reads the repository status again (in the background). The diffs of
+    /// the open files follow when it comes.
+    fn refresh_repo(&mut self) {
+        if let Some(root) = self.root.clone() {
+            self.worker.repo_status(root, self.diff_base.clone());
+        }
+    }
+
+    /// Asks for the diffs of a tab, when it is a file of the project.
+    fn request_diff(&mut self, idx: usize) {
+        let (Some(root), Some(repo)) = (self.root.clone(), self.repo.clone()) else { return };
+        let Some(t) = self.tabs.get_mut(idx) else { return };
+        if repo.error.is_some() || !t.path.starts_with(&root) {
+            return;
+        }
+        t.diff_requested = true;
+        self.worker.file_diff(
+            root,
+            t.path.clone(),
+            t.rel.clone(),
+            t.text.clone(),
+            repo.merge_base.clone(),
+            repo.head.clone(),
+        );
+    }
+
+    /// `]` (dir 1) or `[` (dir -1): the next or previous change in the file.
+    /// After the last one, a toast first, then the next changed file.
+    fn jump_change(&mut self, dir: i8) {
+        if !self.show_diff {
+            let key = self.keys.shortcut(Action::ToggleDiff).map(|s| s.label()).unwrap_or_default();
+            self.toast(format!("Turn on diff mode to jump between changes: {key}"));
+            return;
+        }
+        let Some(t) = self.tabs.get_mut(self.active) else {
+            self.jump_file(dir, "");
+            return;
+        };
+        let name = t.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let Some(map) = t.rows.clone() else {
+            if t.diff_requested {
+                self.toast("The diff is not ready yet");
+            } else {
+                self.jump_file(dir, "No changes in this file.");
+            }
+            return;
+        };
+        let n = map.changes.len() as isize;
+        if n == 0 {
+            self.jump_file(dir, "No changes in this file.");
+            return;
+        }
+        let next = match t.change {
+            Some(c) => c as isize + dir as isize,
+            None if dir > 0 => map.changes.iter().position(|c| c.0 >= t.top_row).map_or(n, |i| i as isize),
+            None => map.changes.iter().rposition(|c| c.0 <= t.top_row).map_or(-1, |i| i as isize),
+        };
+        if next < 0 || next >= n {
+            let why = if dir > 0 { format!("Last change in {name}.") } else { format!("First change in {name}.") };
+            self.jump_file(dir, &why);
+            return;
+        }
+        self.diff_edge = 0;
+        go_to_change(t, next as usize);
+    }
+
+    /// Opens the next (or previous) changed file, at its first (or last)
+    /// change. The first press only says so.
+    fn jump_file(&mut self, dir: i8, why: &str) {
+        let (Some(root), Some(repo)) = (self.root.clone(), self.repo.clone()) else { return };
+        let files = repo.changed_paths();
+        if files.is_empty() {
+            self.toast(format!("Nothing changed against {}.", repo.base));
+            return;
+        }
+        let n = files.len() as isize;
+        let here = self.current().and_then(|t| files.iter().position(|f| *f == t.rel));
+        let next = match here {
+            Some(i) => files[(i as isize + dir as isize).rem_euclid(n) as usize].clone(),
+            None if dir > 0 => files[0].clone(),
+            None => files[files.len() - 1].clone(),
+        };
+        if self.diff_edge != dir {
+            self.diff_edge = dir;
+            let key = if dir > 0 { "]" } else { "[" };
+            let (_, name) = split_path(&next);
+            self.toast(format!("{why} Press {key} again for {name}").trim().to_string());
+            return;
+        }
+        self.open_path(&root.join(&next), None, None, true);
+        self.diff_edge = 0;
+        if let Some(t) = self.tabs.get_mut(self.active) {
+            t.change = None;
+            t.pending_change = Some(dir);
+            apply_pending_change(t);
+        }
+        self.toast(format!("Opened {next}"));
+    }
+
+    /// The base branch picker. The branches load in the background.
+    fn open_branch_picker(&mut self) {
+        let Some(root) = self.root.clone() else { return };
+        self.picker = Some(Picker::new(PickerKind::Branches, Arc::new(Vec::new())));
+        self.worker.branches(root);
+    }
+
+    fn branch_items(&self, list: &[Branch]) -> Vec<PickItem> {
+        let theme = &self.theme;
+        let base = self.repo.as_ref().map(|r| r.base.clone()).or(self.diff_base.clone()).unwrap_or_default();
+        let default = self.repo.as_ref().map(|r| r.default_base.clone()).unwrap_or_default();
+        let now = now_secs();
+        let mut list: Vec<&Branch> = list.iter().collect();
+        // The default branch first in its group.
+        list.sort_by_key(|b| (b.remote, b.name != default));
+        list.into_iter()
+            .map(|b| {
+                let detail = if b.is_head && !b.remote {
+                    "checked out (HEAD)".to_string()
+                } else if b.time > 0 {
+                    crate::git::relative_time(b.time, now)
+                } else {
+                    String::new()
+                };
+                let mut item = PickItem::new(&b.name, detail, Payload::Branch(b.name.clone()), 0);
+                item.group = Some(if b.remote { "Remote" } else { "Local" });
+                item.dim = b.is_head && !b.remote;
+                if b.name == base {
+                    item.tags.push(("✓ current base".into(), theme.green));
+                } else if b.name == default {
+                    item.tags.push(("default".into(), theme.fg_dim));
+                }
+                item
+            })
+            .collect()
+    }
+
+    /// Diffs against another branch, and remembers it for the project.
+    fn choose_base(&mut self, name: String) {
+        if self.repo.as_ref().is_some_and(|r| r.head_name == name) {
+            self.toast(format!("{name} is checked out. Pick another branch to diff against."));
+            return;
+        }
+        if let Some(root) = &self.root {
+            save_diff_base(root, Some(&name));
+        }
+        self.diff_base = Some(name.clone());
+        self.diff_edge = 0;
+        for t in &mut self.tabs {
+            t.change = None;
+        }
+        if !self.show_diff {
+            self.show_diff = true;
+        }
+        self.refresh_repo();
+        self.toast(format!("Diff against {name}. Remembered for this project."));
+    }
+
+    /// The tags of a changed file in the pickers: `+13 −2 ● M`.
+    fn change_tags(&self, rel: &str) -> Vec<(String, Color32)> {
+        let Some(repo) = &self.repo else { return Vec::new() };
+        let mark = self.diff_marks.get(rel).copied().unwrap_or_default();
+        let counts = repo
+            .branch_files
+            .iter()
+            .find(|f| f.rel == rel)
+            .or_else(|| repo.uncommitted_files.iter().find(|f| f.rel == rel));
+        let mut tags = Vec::new();
+        if let Some(f) = counts {
+            tags.push((format!("+{}", f.added), self.theme.green));
+            tags.push((format!("−{}", f.removed), self.theme.red));
+        }
+        if mark.uncommitted {
+            tags.push(("●".into(), self.theme.yellow));
+        }
+        if let Some(b) = mark.branch {
+            tags.push((b.to_string(), if b == 'A' { self.theme.green } else { self.theme.blue }));
+        }
+        tags
+    }
+
+    fn changed_file_items(&self) -> Arc<Vec<PickItem>> {
+        let files = self.repo.as_ref().map(|r| r.changed_paths()).unwrap_or_default();
+        Arc::new(
+            files
+                .into_iter()
+                .map(|rel| {
+                    let mut item = PickItem::new(&rel, "", Payload::File(rel.clone()), 0);
+                    item.tags = self.change_tags(&rel);
+                    item
+                })
+                .collect(),
+        )
+    }
+
+    fn changed_title(&self) -> String {
+        format!("Go to changed file (vs {})", self.repo.as_ref().map(|r| r.base.as_str()).unwrap_or("…"))
+    }
+
+    /// Go to file; in diff mode Tab shows the changed files.
+    fn open_file_picker(&mut self, changed: bool) {
+        let items = self.file_items();
+        let mut picker = Picker::new(PickerKind::Files, items);
+        if self.show_diff {
+            picker = picker.with_changed(self.changed_file_items(), self.changed_title(), changed);
+        }
+        self.picker = Some(picker);
+    }
+
+    fn handle_repo_status(&mut self, st: Arc<RepoStatus>) {
+        if !self.show_diff {
+            return;
+        }
+        self.diff_marks = Arc::new(st.marks());
+        self.file_items = None;
+        self.repo = Some(st.clone());
+        if self.announce_diff {
+            self.announce_diff = false;
+            let msg = match (&st.error, st.base_missing) {
+                (Some(e), _) => format!("Diff mode needs git: this project is {e}"),
+                (None, true) if st.base.is_empty() => {
+                    "No main or master branch: choose a base with \"Diff against branch…\"".to_string()
+                }
+                (None, true) => format!("Branch {} not found: choose a base with \"Diff against branch…\"", st.base),
+                (None, false) => format!("Diff mode on: {}", st.range_label()),
+            };
+            self.toast(msg);
+        }
+        // The open files: a diff for each, made with this merge-base and HEAD.
+        for i in 0..self.tabs.len() {
+            let t = &self.tabs[i];
+            let stale = match &t.diff {
+                None => !t.diff_requested,
+                Some(d) => d.merge_base != st.merge_base || d.head != st.head,
+            };
+            if stale {
+                self.request_diff(i);
+            }
+        }
+        if let Some(p) = self.picker.take() {
+            self.picker = Some(if p.kind == PickerKind::Files {
+                let (items, title) = (self.changed_file_items(), self.changed_title());
+                let mut fresh =
+                    Picker::new(PickerKind::Files, self.file_items()).with_changed(items, title, p.show_changed);
+                fresh.query = p.query;
+                fresh
+            } else {
+                p
+            });
+        }
     }
 
     fn go_back(&mut self) {
@@ -653,11 +1033,13 @@ impl App {
         let items: Vec<PickItem> = self
             .all_files
             .iter()
-            .map(|rel| PickItem {
-                label: rel.clone(),
-                detail: String::new(),
-                payload: Payload::File(rel.clone()),
-                bonus: if rel.ends_with(".rb") { 2 } else { 0 },
+            .map(|rel| {
+                let mut item =
+                    PickItem::new(rel, "", Payload::File(rel.clone()), if rel.ends_with(".rb") { 2 } else { 0 });
+                if self.show_diff && self.diff_marks.contains_key(rel) {
+                    item.tags = self.change_tags(rel);
+                }
+                item
             })
             .collect();
         let items = Arc::new(items);
@@ -676,12 +1058,12 @@ impl App {
             .map(|e| {
                 let path = index.files[e.loc.file as usize].path.clone();
                 let where_ = index.display_path(e.loc.file);
-                PickItem {
-                    label: e.label,
-                    detail: format!("{} · {where_}", e.detail),
-                    payload: Payload::Loc(path, e.loc.name_span.start),
-                    bonus: if e.project { 30 } else { 0 },
-                }
+                PickItem::new(
+                    e.label,
+                    format!("{} · {where_}", e.detail),
+                    Payload::Loc(path, e.loc.name_span.start),
+                    if e.project { 30 } else { 0 },
+                )
             })
             .collect();
         let items = Arc::new(items);
@@ -694,12 +1076,7 @@ impl App {
             Action::ALL
                 .iter()
                 .filter(|a| **a != Action::ClosePopup && **a != Action::Commands)
-                .map(|a| PickItem {
-                    label: a.title().to_string(),
-                    detail: self.keys.shortcut(*a).map(|s| s.label()).unwrap_or_default(),
-                    payload: Payload::Action(*a),
-                    bonus: 0,
-                })
+                .map(|a| PickItem::new(a.title(), self.keys.labels(*a), Payload::Action(*a), 0))
                 .collect(),
         )
     }
@@ -716,10 +1093,17 @@ impl App {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             }
-            Action::GoToFile => {
-                let items = self.file_items();
-                self.picker = Some(Picker::new(PickerKind::Files, items));
+            Action::GoToFile => self.open_file_picker(false),
+            Action::GoToChangedFile => {
+                if !self.show_diff {
+                    self.toggle_diff();
+                }
+                self.open_file_picker(true);
             }
+            Action::ToggleDiff => self.toggle_diff(),
+            Action::DiffAgainstBranch => self.open_branch_picker(),
+            Action::NextChange => self.jump_change(1),
+            Action::PrevChange => self.jump_change(-1),
             Action::GoToSymbol => match self.symbol_items() {
                 Some(items) => self.picker = Some(Picker::new(PickerKind::Symbols, items)),
                 None => self.toast("The index is not ready yet"),
@@ -763,6 +1147,8 @@ impl App {
                 } else if let Some(t) = self.tabs.get_mut(self.active).filter(|t| t.find.open) {
                     t.find.open = false;
                     t.find.matches.clear();
+                } else if let Some(t) = self.tabs.get_mut(self.active).filter(|t| t.change.is_some()) {
+                    t.change = None;
                 } else if self.bottom.is_some() && self.show_bottom {
                     self.show_bottom = false;
                 }
@@ -855,6 +1241,42 @@ impl App {
                         self.open_folder(folder, self.picked_to_new_window);
                     }
                 }
+                Msg::RepoStatus(st) => self.handle_repo_status(st),
+                Msg::FileDiff { path, text, diff } => {
+                    let on = self.show_diff;
+                    for t in self.tabs.iter_mut().filter(|t| t.path == path) {
+                        // A diff of older text: a newer one is on its way.
+                        if *t.text != *text {
+                            continue;
+                        }
+                        t.diff = Some(diff.clone());
+                        t.diff_requested = false;
+                        t.set_rows(on);
+                        apply_pending_change(t);
+                    }
+                    // Made with an older merge-base or HEAD: make it again.
+                    if let Some(repo) = self.repo.clone()
+                        && (diff.merge_base != repo.merge_base || diff.head != repo.head)
+                        && let Some(i) = self.tabs.iter().position(|t| t.path == path && !t.diff_requested)
+                    {
+                        self.request_diff(i);
+                    }
+                }
+                Msg::Branches(list) => {
+                    let items = Arc::new(self.branch_items(&list));
+                    if let Some(p) = self.picker.as_mut().filter(|p| p.kind == PickerKind::Branches) {
+                        p.set_items(items);
+                    }
+                }
+                Msg::Fingerprint(fp) => {
+                    if fp != self.diff_fingerprint {
+                        let first = self.diff_fingerprint.is_empty();
+                        self.diff_fingerprint = fp;
+                        if !first && self.show_diff {
+                            self.refresh_repo();
+                        }
+                    }
+                }
             }
         }
         // Files changed on disk: reload open tabs, and index again after a
@@ -864,7 +1286,8 @@ impl App {
         {
             self.last_change = None;
             let changed: Vec<PathBuf> = std::mem::take(&mut self.pending_changes);
-            for t in self.tabs.iter_mut() {
+            let mut reloaded = Vec::new();
+            for (i, t) in self.tabs.iter_mut().enumerate() {
                 if changed.contains(&t.path)
                     && let Ok(text) = std::fs::read_to_string(&t.path)
                     && *text != *t.text
@@ -874,7 +1297,24 @@ impl App {
                     fresh.scroll_to_line = Some(t.top_line + 6);
                     self.worker.highlight(fresh.path.clone(), fresh.text.clone());
                     *t = fresh;
+                    reloaded.push(i);
                 }
+            }
+            // The new text needs its blame and its diff again.
+            for i in reloaded {
+                if self.show_blame
+                    && let Some(root) = self.root.clone()
+                {
+                    let t = &mut self.tabs[i];
+                    t.blame_requested = true;
+                    self.worker.blame(root, t.path.clone(), t.rel.clone());
+                }
+                if self.show_diff {
+                    self.request_diff(i);
+                }
+            }
+            if self.show_diff {
+                self.refresh_repo();
             }
             if let Some(root) = self.root.clone() {
                 self.index_status = "indexing…".into();
@@ -989,9 +1429,84 @@ impl App {
                         ui.spinner();
                     }
                     ui.label(RichText::new(&self.index_status).color(theme.fg_dim).small());
+                    if self.show_diff && self.diff_pill(ui) {
+                        self.open_branch_picker();
+                    }
                 });
             });
         });
+    }
+
+    /// The diff bar in the top bar: `Diff: main…feature/order-refunds +77
+    /// −3, 3 uncommitted`. A click chooses another base branch; the
+    /// pointer on it shows what the colors mean.
+    fn diff_pill(&self, ui: &mut egui::Ui) -> bool {
+        let theme = &self.theme;
+        let mut job = egui::text::LayoutJob::default();
+        let font = egui::FontId::proportional(13.5);
+        let mono = egui::FontId::monospace(12.5);
+        let mut add = |text: &str, color: Color32, font: &egui::FontId| {
+            job.append(text, 0.0, egui::TextFormat { font_id: font.clone(), color, ..Default::default() });
+        };
+        add("Diff: ", theme.fg_dim, &font);
+        match &self.repo {
+            None => add("reading git…", theme.fg_dim, &font),
+            Some(r) if r.error.is_some() => add(r.error.as_deref().unwrap_or_default(), theme.yellow, &font),
+            Some(r) => {
+                if r.base_missing {
+                    let what =
+                        if r.base.is_empty() { "no base branch".to_string() } else { format!("{} not found", r.base) };
+                    add(&what, theme.yellow, &font);
+                } else {
+                    add(&r.base, theme.accent, &font);
+                    add("…", theme.fg_dim, &font);
+                    add(&r.head_name, theme.fg_bright, &font);
+                    let (a, d) = r.branch_totals();
+                    add(&format!("  +{a}"), theme.green, &mono);
+                    add(&format!(" −{d}"), theme.red, &mono);
+                }
+                let u = r.uncommitted_files.len();
+                if u > 0 {
+                    add(&format!(", {u} uncommitted"), theme.yellow, &font);
+                }
+            }
+        }
+        let button = egui::Button::new(job).fill(theme.bg_light).stroke(egui::Stroke::new(1.0, theme.muted));
+        let r = ui.add(button).on_hover_ui(|ui| self.diff_legend(ui));
+        r.clicked()
+    }
+
+    /// What the colors of diff mode mean.
+    fn diff_legend(&self, ui: &mut egui::Ui) {
+        let theme = &self.theme;
+        let base = self.repo.as_ref().map(|r| r.base.clone()).unwrap_or_else(|| "the base".into());
+        ui.set_max_width(380.0);
+        ui.label(RichText::new("What the colors mean").color(theme.fg_bright));
+        let rows: [(Color32, &str, String); 4] = [
+            (theme.green, "Added or changed on the branch", format!("committed, since the merge-base with {base}")),
+            (theme.red, "Removed on the branch", "a ghost row: no line number, no links".into()),
+            (theme.yellow, "Changed, not committed", "the file on disk vs HEAD".into()),
+            (theme.yellow.gamma_multiply(0.6), "Removed, not committed", "a ghost row with a dashed bar".into()),
+        ];
+        for (color, title, small) in rows {
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(4.0, 30.0), egui::Sense::hover());
+                ui.painter().rect_filled(r, 1.0, color);
+                ui.vertical(|ui| {
+                    ui.label(RichText::new(title).color(theme.fg));
+                    ui.label(RichText::new(small).color(theme.fg_dim).small());
+                });
+            });
+        }
+        ui.label(
+            RichText::new(
+                "A changed line is a ghost row with the old text, then the new line. The code view is always \
+                 the file on disk, so Ctrl+click, find and search work as before. Click to diff against \
+                 another branch.",
+            )
+            .color(theme.fg_dim)
+            .small(),
+        );
     }
 
     /// The project name in the toolbar. Its menu goes back to the project
@@ -1055,21 +1570,42 @@ impl App {
             .default_size(260.0)
             .frame(egui::Frame::NONE.fill(theme.bg_dark).inner_margin(6.0))
             .show(ui, |ui| {
+                if !self.show_diff && self.sidebar_tab == SidebarTab::Changes {
+                    self.sidebar_tab = SidebarTab::Files;
+                }
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Files, "Files");
                     ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Outline, "Outline");
+                    if self.show_diff {
+                        let n = self.repo.as_ref().map_or(0, |r| r.changed_paths().len());
+                        let mut job = egui::text::LayoutJob::default();
+                        job.append("Changes ", 0.0, egui::TextFormat { color: theme.fg, ..Default::default() });
+                        job.append(
+                            &format!(" {n} "),
+                            0.0,
+                            egui::TextFormat {
+                                color: theme.bg_dark,
+                                background: theme.accent,
+                                font_id: egui::FontId::proportional(11.0),
+                                ..Default::default()
+                            },
+                        );
+                        ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Changes, job);
+                    }
                 });
                 ui.separator();
                 match self.sidebar_tab {
                     SidebarTab::Files => {
                         let current = self.current().map(|t| t.rel.clone());
                         let project = self.root.clone().unwrap_or_default();
-                        if let Some(rel) = self.tree.ui(ui, &theme, current.as_deref(), &project)
+                        let marks = self.show_diff.then(|| self.diff_marks.clone());
+                        if let Some(rel) = self.tree.ui(ui, &theme, current.as_deref(), &project, marks.as_deref())
                             && let Some(root) = self.root.clone()
                         {
                             self.open_path(&root.join(rel), None, None, true);
                         }
                     }
+                    SidebarTab::Changes => self.changes_list(ui),
                     SidebarTab::Outline => {
                         let (Some(index), Some(file)) = (self.index.clone(), self.current_file_id()) else {
                             ui.label(RichText::new("No outline").color(theme.fg_dim));
@@ -1108,6 +1644,84 @@ impl App {
                     }
                 }
             });
+    }
+
+    /// The Changes tab of the side bar: the files the branch changed, and
+    /// the files with changes that are not committed, with their counts.
+    fn changes_list(&mut self, ui: &mut egui::Ui) {
+        let theme = self.theme.clone();
+        let Some(repo) = self.repo.clone() else {
+            ui.label(RichText::new("Reading git…").color(theme.fg_dim));
+            return;
+        };
+        if let Some(e) = &repo.error {
+            ui.label(RichText::new(format!("No changes: this project is {e}.")).color(theme.fg_dim));
+            return;
+        }
+        let current = self.current().map(|t| t.rel.clone());
+        let mut open = None;
+        egui::ScrollArea::vertical().auto_shrink([false, false]).id_salt("changes").show(ui, |ui| {
+            let section = |ui: &mut egui::Ui, left: &str, right: String| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(left.to_uppercase()).color(theme.fg_dim).small());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(RichText::new(right).color(theme.fg_dim).small());
+                    });
+                });
+            };
+            let row = |ui: &mut egui::Ui, f: &crate::diff::ChangedFile, uncommitted: bool| -> bool {
+                let (dir, name) = split_path(&f.rel);
+                let gone = f.status == 'D';
+                ui.horizontal(|ui| {
+                    let (mark, color) = match (uncommitted, f.status) {
+                        (true, 'D') => ("D", theme.red),
+                        (true, _) => ("●", theme.yellow),
+                        (false, 'A') => ("A", theme.green),
+                        (false, 'D') => ("D", theme.red),
+                        _ => ("M", theme.blue),
+                    };
+                    ui.label(RichText::new(mark).color(color).monospace().small());
+                    let selected = current.as_deref() == Some(f.rel.as_str());
+                    let text = RichText::new(name).color(if gone { theme.fg_dim } else { theme.fg });
+                    let text = if selected { text.background_color(theme.selection) } else { text };
+                    let r = ui.add(egui::Label::new(text).sense(egui::Sense::click())).on_hover_text(&f.rel);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(RichText::new(format!("−{}", f.removed)).color(theme.red).monospace().small());
+                        ui.label(RichText::new(format!("+{}", f.added)).color(theme.green).monospace().small());
+                        ui.add(egui::Label::new(RichText::new(dir).color(theme.fg_dim).small()).truncate());
+                    });
+                    r.clicked() && !gone
+                })
+                .inner
+            };
+            section(ui, "On the branch", format!("vs {}", repo.base));
+            if repo.branch_files.is_empty() {
+                let why = if repo.base_missing {
+                    "No base branch. Choose one with \"Diff against branch…\"."
+                } else {
+                    "No commits on the branch since the merge-base."
+                };
+                ui.label(RichText::new(why).color(theme.fg_dim).small());
+            }
+            for f in &repo.branch_files {
+                if row(ui, f, false) {
+                    open = Some(f.rel.clone());
+                }
+            }
+            ui.add_space(8.0);
+            section(ui, "Not committed", "vs HEAD".into());
+            if repo.uncommitted_files.is_empty() {
+                ui.label(RichText::new("The working tree is clean.").color(theme.fg_dim).small());
+            }
+            for f in &repo.uncommitted_files {
+                if row(ui, f, true) {
+                    open = Some(f.rel.clone());
+                }
+            }
+        });
+        if let (Some(rel), Some(root)) = (open, self.root.clone()) {
+            self.open_path(&root.join(rel), None, None, true);
+        }
     }
 
     fn bottom_panel(&mut self, ui: &mut egui::Ui) {
@@ -1269,6 +1883,19 @@ impl App {
                             ui.separator();
                             tree::copy_path_buttons(ui, &t.rel, &t.path);
                         });
+                        if self.show_diff
+                            && let Some(mark) = self.diff_marks.get(&t.rel)
+                        {
+                            ui.add_space(3.0);
+                            if let Some(b) = mark.branch {
+                                let color = if b == 'A' { theme.green } else { theme.blue };
+                                ui.label(RichText::new(b.to_string()).color(color).monospace().small());
+                            }
+                            if mark.uncommitted {
+                                ui.label(RichText::new("●").color(theme.yellow).small());
+                            }
+                            ui.add_space(3.0);
+                        }
                         if active && ui.small_button("✕").clicked() {
                             close = Some((i, TabClose::This));
                         }
@@ -1405,6 +2032,7 @@ impl App {
                 }
                 Some(Ok(Picked::Search(q))) => self.search_project(&q),
                 Some(Ok(Picked::Item(item))) => match item.payload {
+                    Payload::Branch(name) => self.choose_base(name),
                     Payload::File(rel) => {
                         if let Some(root) = self.root.clone() {
                             self.open_path(&root.join(rel), None, None, true);
@@ -1605,6 +2233,19 @@ impl App {
         }
     }
 
+    /// In diff mode, looks every few seconds if `HEAD` or the base branch
+    /// moved (a commit, a checkout, a fetch), and then makes the diffs again.
+    fn poll_git(&mut self, ctx: &egui::Context) {
+        const EVERY: Duration = Duration::from_secs(4);
+        let (true, Some(root)) = (self.show_diff, self.root.clone()) else { return };
+        if self.diff_poll.is_none_or(|t| t.elapsed() >= EVERY) {
+            self.diff_poll = Some(Instant::now());
+            let base = self.repo.as_ref().map(|r| r.base.clone()).unwrap_or_default();
+            self.worker.fingerprint(root, base);
+        }
+        ctx.request_repaint_after(EVERY);
+    }
+
     fn update_title(&mut self, ctx: &egui::Context) {
         let project = self.root.as_ref().and_then(|r| r.file_name()).map(|n| n.to_string_lossy().to_string());
         let title = match (project, self.current()) {
@@ -1652,6 +2293,7 @@ impl App {
             self.overlays(&ctx);
             return;
         }
+        self.poll_git(&ctx);
         self.toolbar(ui);
         if self.show_sidebar {
             self.sidebar(ui);
@@ -1685,13 +2327,28 @@ impl App {
             let index = self.index.clone();
             let file_id = self.current_file_id();
             let show_blame = self.show_blame;
+            let base = self.show_diff.then(|| self.repo.as_ref().map(|r| r.base.clone()).unwrap_or_default());
+            let in_project = self.root.as_ref().is_some_and(|r| self.tabs[self.active].path.starts_with(r));
+            let note = match &self.repo {
+                None => Some("Reading git…"),
+                Some(r) if r.error.is_some() => Some("Not a git repository"),
+                Some(_) if !in_project => Some("Not a file of this project"),
+                Some(_) => None,
+            };
             let t = &mut self.tabs[self.active];
             let links = match (&index, file_id) {
                 (Some(ix), Some(f)) => Some(Links { index: ix, file: f }),
                 _ => None,
             };
-            events =
-                view::code_view(ui, t, &theme, links.as_ref().map(|l| l as &dyn Clickable), show_blame, now_secs());
+            events = view::code_view(
+                ui,
+                t,
+                &theme,
+                links.as_ref().map(|l| l as &dyn Clickable),
+                show_blame,
+                now_secs(),
+                base.as_deref().map(|base| view::DiffMode { base, note }),
+            );
         });
 
         // What happened in the code view.
@@ -1720,6 +2377,9 @@ impl App {
                 }
             }
             None => self.hover = None,
+        }
+        if events.ghost_click {
+            self.toast("A removed line has no links: it is not in the file on disk.");
         }
         if let (Some(sha), Some(root)) = (events.blame_click, self.root.clone()) {
             self.toast("Opening the commit on GitHub…");

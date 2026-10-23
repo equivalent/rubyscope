@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use eframe::egui;
 
 mod app;
+mod diff;
 mod external;
 mod git;
 mod highlight;

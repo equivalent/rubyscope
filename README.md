@@ -31,7 +31,7 @@ the end tells what is done.
 |---|---|
 | `ruby` | Gems and the standard library in the index. rubyscope asks mise or rbenv (`mise which ruby`, `rbenv which ruby`) for the Ruby of the project folder, else it runs the `ruby` on `PATH`. |
 | Installed gems (`bundle install`) | Clicks that go into gem source. Only gems that are installed are indexed. |
-| `git` | Git blame and "Open on GitHub" |
+| `git` | Git blame, diff mode and "Open on GitHub" |
 | `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit |
 | `fc-match` (fontconfig) | Linux: the system monospace font for code. macOS uses Menlo. |
 | `xdg-open` | Linux: opens links in the browser. macOS uses `open`. |
@@ -129,13 +129,16 @@ rubyscope                                            # see below
    Rest the pointer on a blame line to see the commit. Click it to open the commit, or its pull request, on GitHub.
 8. Press Ctrl+K to see all commands. Some commands have no key, for example
    "Index the project again" and "Open in editor".
+9. Press Ctrl+Shift+D for diff mode: what your branch changed, as in a pull
+   request, and what is not committed yet. Press ] and [ to go from change
+   to change. See "Diff mode" below.
 
 ## The window
 
 | Part | What it has |
 |---|---|
-| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. |
-| Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. |
+| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
+| Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files. |
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
 | Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
 | Code view | Drag to select text. Double-click selects a word. Ctrl+C copies the selection. |
@@ -156,6 +159,8 @@ rubyscope                                            # see below
 | Click a blame block | Open the commit (or its pull request) on GitHub |
 | "callers" in the results panel | Who calls that method (one level up the call hierarchy) |
 | Middle-click a tab | Close the tab |
+| Click the diff bar in the top bar | Diff against another branch |
+| Click a mark on the right edge (diff mode) | Go to that change |
 
 ## Keys
 
@@ -175,8 +180,9 @@ Ctrl, as in Vim.
 | Ctrl+W | Close tab |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+B | Show or hide git blame |
+| Ctrl+Shift+D | Diff mode on or off |
 | Ctrl+Shift+B | Show or hide the side bar |
-| Esc | Close a popup, then the find bar, then the results panel |
+| Esc | Close a popup, then the find bar, then the frame of the current change, then the results panel |
 
 Ctrl+F and Ctrl+Shift+F start with the selected text, when it is on one
 line.
@@ -193,6 +199,7 @@ These keys scroll the code when no text field has focus:
 | Shift+G, End | Go to the end |
 | A number, then g or G (`500g`) | Go to that line |
 | 0 | Scroll to the left edge |
+| ] / [, Alt+↓ / Alt+↑ | Diff mode: next / previous change |
 
 The mouse wheel scrolls 3 times faster than the egui default.
 
@@ -214,6 +221,8 @@ can give them one (see below).
 | Open this line on GitHub | `open_on_github` |
 | Copy path:line | `copy_path` |
 | Index the project again, parsing every file | `reindex` |
+| Diff against branch… | `diff_against_branch` |
+| Go to changed file | `go_to_changed_file` |
 
 "Open in editor" uses `omarchy-launch-editor` when it is on `PATH`.
 Otherwise it opens nvim in a terminal with `xdg-terminal-exec`, or runs
@@ -229,6 +238,7 @@ defaults.
 
 ```toml
 toggle_blame = "cmd+alt+b"
+next_change = ["n", "alt+down"]
 find_usages = "alt+u"
 back = "alt+left"
 forward = "alt+right"
@@ -238,8 +248,9 @@ reindex = "f5"
 A key is modifiers and one key, joined with `+`. The modifiers are `cmd`,
 `ctrl`, `shift` and `alt`. `cmd` is Cmd on macOS and Ctrl on Linux, so one
 file works on both. `ctrl` is always the Ctrl key. The key can be a letter, a digit, `esc`, `tab`, `enter`,
-`space`, `left`, `right`, `up`, `down` or `f1` to `f12`. rubyscope reads
-this file when it starts.
+`space`, `left`, `right`, `up`, `down`, `[`, `]` or `f1` to `f12`. A
+command can have several keys: give a list, as for `next_change` above.
+rubyscope reads this file when it starts.
 
 The names of the commands that have a default key:
 
@@ -257,7 +268,73 @@ The names of the commands that have a default key:
 | `prev_tab` | Ctrl+Shift+Tab |
 | `toggle_blame` | Ctrl+B |
 | `toggle_sidebar` | Ctrl+Shift+B |
+| `toggle_diff` | Ctrl+Shift+D |
+| `next_change` | ], Alt+↓ |
+| `prev_change` | [, Alt+↑ |
 | `close_popup` | Esc |
+
+`next_change` and `prev_change` work only when no text field has focus, so
+`]` and `[` can still be typed in the find bar and the pickers.
+
+## Diff mode
+
+Press Ctrl+Shift+D (or choose "Toggle diff mode" in Ctrl+K). The code view
+shows what your branch changed and what is not committed yet:
+
+| Color | What it is |
+|---|---|
+| Green background, green bar | A line added or changed on the branch (committed) |
+| Red row, struck through | A line removed on the branch: a "ghost row" |
+| Amber background, amber bar | A line added or changed, not committed |
+| Amber row, struck through, dashed bar | A line removed, not committed |
+
+A changed line is a ghost row with the old text, then the new line. Rest
+the pointer on the diff bar in the top bar to see this list.
+
+The branch diff starts at the merge-base of the base branch and `HEAD`, as
+in a GitHub pull request. So new commits on the base branch are not shown
+as changes. "Not committed" is the file on disk against `HEAD`, staged or
+not. A new file that git does not know yet is all amber.
+
+The code view is still the file on disk. Ctrl+click, the hover, find, go
+to line and the selection work as before. Ghost rows have no line number
+(a dim `−`), no links and no blame, and they are not selected or copied.
+Rest the pointer on a ghost row to see why.
+
+- The diff bar in the top bar says what is compared, for example
+  `Diff: main…feature/order-refunds +77 −3, 3 uncommitted`: the base
+  branch, your branch, the lines added and removed on the branch, and the
+  number of files with changes that are not committed.
+- Click the diff bar, or choose "Diff against branch…" in Ctrl+K, to pick
+  another base branch from the local and remote branches. The current base
+  and the default (`main`, else `master`, else what `origin/HEAD` points
+  to) are marked. rubyscope remembers the choice for each project. Pick
+  your own pushed branch (`origin/feature/x`) to see what is not pushed
+  yet.
+- ] and [ (or Alt+↓ and Alt+↑) go to the next and previous change. The
+  change gets a frame, and a chip in the corner of the code view says
+  `change 2/6`. At the last change, ] says so; press it again to open the
+  next changed file at its first change. [ works the same way backwards.
+- The marks on the right edge show where the changes are in the file.
+  Click a mark to go to that change.
+- The file tree marks changed files: a green A for a file added on the
+  branch, a blue M for a changed file, an amber dot for changes that are
+  not committed. A closed folder with changed files has a dot. The tabs
+  have the same marks.
+- In Ctrl+P, Tab switches between all files and the changed files.
+  "Go to changed file" in Ctrl+K opens the changed files list.
+- The "Changes" tab in the side bar lists the files changed on the branch
+  (against the base) and the files that are not committed (against
+  `HEAD`), with the lines added and removed.
+- Blame (Ctrl+B) works in diff mode too. Lines that are not committed say
+  "not committed" in amber, and ghost rows have an empty, striped cell.
+
+The diffs are made with `git` in the background. They are made again when
+an open file changes on disk, and when `HEAD` or the base branch moves (a
+commit, a checkout, a fetch; rubyscope looks every 4 seconds). Outside a
+git repository, the diff bar says so and nothing is marked. When the base
+branch does not exist any more, the diff bar says so and only the changes
+that are not committed are shown.
 
 ## What a click understands
 
@@ -368,6 +445,7 @@ rubyscope never writes into the project folder.
 | `~/.cache/rubyscope/` (or `$XDG_CACHE_HOME/rubyscope/`) | The saved index of each project |
 | `~/.local/state/rubyscope/recent.json` | The recent projects (up to 12) |
 | `~/.local/state/rubyscope/session*.json` | The open tabs of each project |
+| `~/.local/state/rubyscope/diff*.json` | The base branch of diff mode for each project |
 
 It reads `~/.config/rubyscope/keys.toml` (keys) and
 `~/.local/state/omarchy/current/theme/colors.toml` (colors).
@@ -388,6 +466,7 @@ It reads `~/.config/rubyscope/keys.toml` (keys) and
 | A click goes to an old line, or a new method is not found | Press Ctrl+K and choose "Index the project again". If this does not help, close rubyscope and delete `~/.cache/rubyscope/`. |
 | A click on a gem name or a Rails method does nothing | Run `ruby -v` and `bundle install` in the project folder. rubyscope indexes only gems that are installed for the Ruby that the project uses. |
 | Blame does not show | The project must be a git repository, and `git` must be on `PATH`. |
+| Diff mode marks nothing | The diff bar in the top bar tells why: not a git repository, or the base branch is not found. Click it to choose a base branch. |
 | "This project has no GitHub remote" | The `origin` remote must be on github.com. |
 | A blame click opens the commit, not the pull request | Install the GitHub CLI (`gh`) and log in. |
 | You want to see what the index does | Start rubyscope from a terminal. It prints a line such as `rubyscope: indexed 9000 files in 0.71 s, 9000 from the saved index`. |

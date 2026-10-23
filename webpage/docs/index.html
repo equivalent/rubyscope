@@ -38,6 +38,7 @@
         <li><a href="#scroll">Scroll keys</a></li>
         <li><a href="#commands">Commands without a key</a></li>
         <li><a href="#change-keys">Change the keys</a></li>
+        <li><a href="#diff">Diff mode</a></li>
         <li><a href="#clicks">What a click understands</a></li>
         <li><a href="#index">The saved index</a></li>
         <li><a href="#limits">Limits</a></li>
@@ -175,9 +176,10 @@ rubyscope                                         <span class="c"># the current 
             <tr><td><kbd>Ctrl</kbd> <kbd>Tab</kbd></td><td>Next tab</td></tr>
             <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Tab</kbd></td><td>Previous tab</td></tr>
             <tr><td><kbd>Ctrl</kbd> <kbd>B</kbd></td><td>Show or hide git blame</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></td><td>Diff mode on or off</td></tr>
             <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd></td><td>Show or hide the side bar</td></tr>
             <tr><td><kbd>Ctrl</kbd> <kbd>Q</kbd></td><td>Close the project and go back to the project list. Press it again to quit.</td></tr>
-            <tr><td><kbd>Esc</kbd></td><td>Close a popup, then the find bar, then the results panel</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close a popup, then the find bar, then the frame of the current change, then the results panel</td></tr>
           </tbody>
         </table>
         <p><kbd>Ctrl</kbd> <kbd>F</kbd> and <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> start with the selected text when it is on one line.</p>
@@ -210,6 +212,7 @@ rubyscope                                         <span class="c"># the current 
             <tr><td><kbd>Shift</kbd> <kbd>G</kbd> or <kbd>End</kbd></td><td>Go to the end</td></tr>
             <tr><td>A number, then <kbd>g</kbd></td><td>Go to that line. <kbd>5</kbd><kbd>0</kbd><kbd>0</kbd><kbd>g</kbd> goes to line 500.</td></tr>
             <tr><td><kbd>0</kbd></td><td>Scroll to the left edge</td></tr>
+            <tr><td><kbd>]</kbd> <kbd>[</kbd> or <kbd>Alt</kbd> <kbd>↓</kbd> <kbd>Alt</kbd> <kbd>↑</kbd></td><td>Diff mode: the next or previous change</td></tr>
           </tbody>
         </table>
         <p>The mouse wheel scrolls three times faster than usual in egui apps. Hold <kbd>Shift</kbd> to scroll a page at a time.</p>
@@ -232,6 +235,8 @@ rubyscope                                         <span class="c"># the current 
             <tr><td>Open this line on GitHub</td><td><code>open_on_github</code></td></tr>
             <tr><td>Copy path:line</td><td><code>copy_path</code></td></tr>
             <tr><td>Index the project again, parsing every file</td><td><code>reindex</code></td></tr>
+            <tr><td>Diff against branch…</td><td><code>diff_against_branch</code></td></tr>
+            <tr><td>Go to changed file</td><td><code>go_to_changed_file</code></td></tr>
           </tbody>
         </table>
         <p>"Open in editor" uses <code>omarchy-launch-editor</code> when it is on <code>PATH</code>. Otherwise it opens nvim in a terminal. On macOS it opens nvim in a new Terminal window. "Open on GitHub" needs an <code>origin</code> remote on github.com and opens the line at the commit of <code>HEAD</code>.</p>
@@ -241,11 +246,12 @@ rubyscope                                         <span class="c"># the current 
         <h2>Change the keys</h2>
         <p>Put your keys in <code>~/.config/rubyscope/keys.toml</code>. A key in this file replaces the default key of that command. The other commands keep their defaults. Rubyscope reads the file when it starts.</p>
 <pre><code>toggle_blame = "cmd+alt+b"
+next_change = ["n", "alt+down"]
 find_usages = "alt+u"
 back = "alt+left"
 forward = "alt+right"
 reindex = "f5"</code></pre>
-        <p>A key is modifiers and one key, joined with <code>+</code>. The modifiers are <code>cmd</code>, <code>ctrl</code>, <code>shift</code> and <code>alt</code>. <code>cmd</code> is Cmd on macOS and Ctrl on Linux, so one file works on both. <code>ctrl</code> is always the Ctrl key. The key can be a letter, a digit, <code>esc</code>, <code>tab</code>, <code>enter</code>, <code>space</code>, an arrow (<code>left</code>, <code>right</code>, <code>up</code>, <code>down</code>) or <code>f1</code> to <code>f12</code>.</p>
+        <p>A key is modifiers and one key, joined with <code>+</code>. The modifiers are <code>cmd</code>, <code>ctrl</code>, <code>shift</code> and <code>alt</code>. <code>cmd</code> is Cmd on macOS and Ctrl on Linux, so one file works on both. <code>ctrl</code> is always the Ctrl key. The key can be a letter, a digit, <code>esc</code>, <code>tab</code>, <code>enter</code>, <code>space</code>, an arrow (<code>left</code>, <code>right</code>, <code>up</code>, <code>down</code>), <code>[</code>, <code>]</code> or <code>f1</code> to <code>f12</code>. A command can have several keys: give a list, as for <code>next_change</code> above.</p>
         <table>
           <caption>Names of the commands that have a default key</caption>
           <thead><tr><th scope="col">Name</th><th scope="col">Default</th></tr></thead>
@@ -262,9 +268,30 @@ reindex = "f5"</code></pre>
             <tr><td><code>prev_tab</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Tab</kbd></td></tr>
             <tr><td><code>toggle_blame</code></td><td><kbd>Ctrl</kbd> <kbd>B</kbd></td></tr>
             <tr><td><code>toggle_sidebar</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd></td></tr>
+            <tr><td><code>toggle_diff</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></td></tr>
+            <tr><td><code>next_change</code></td><td><kbd>]</kbd>, <kbd>Alt</kbd> <kbd>↓</kbd></td></tr>
+            <tr><td><code>prev_change</code></td><td><kbd>[</kbd>, <kbd>Alt</kbd> <kbd>↑</kbd></td></tr>
             <tr><td><code>close_popup</code></td><td><kbd>Esc</kbd></td></tr>
           </tbody>
         </table>
+        <p><code>next_change</code> and <code>prev_change</code> work only when no text field has focus, so <kbd>]</kbd> and <kbd>[</kbd> can still be typed in the find bar and the pickers.</p>
+      </section>
+
+      <section id="diff">
+        <h2>Diff mode</h2>
+        <p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd> to see what your branch changed, as in a pull request, and what is not committed yet. The code view is still the file on disk, so <kbd>Ctrl</kbd>+click, the hover, find and go to line work as before.</p>
+        <table>
+          <thead><tr><th scope="col">Color</th><th scope="col">What it is</th></tr></thead>
+          <tbody>
+            <tr><td>Green background, green bar</td><td>A line added or changed on the branch (committed)</td></tr>
+            <tr><td>Red row, struck through</td><td>A line removed on the branch: a ghost row, with no line number and no links</td></tr>
+            <tr><td>Amber background, amber bar</td><td>A line added or changed, not committed</td></tr>
+            <tr><td>Amber row, struck through, dashed bar</td><td>A line removed, not committed</td></tr>
+          </tbody>
+        </table>
+        <p>The branch diff starts at the merge-base of the base branch and <code>HEAD</code>, so new commits on the base branch are not shown. The diff bar in the top bar says what is compared, for example <code>Diff: main…feature/order-refunds +77 −3, 3 uncommitted</code>. Click it, or choose "Diff against branch…" in <kbd>Ctrl</kbd> <kbd>K</kbd>, to pick another base from the local and remote branches. Rubyscope remembers the choice for each project.</p>
+        <p><kbd>]</kbd> and <kbd>[</kbd> go from change to change. At the last change, <kbd>]</kbd> says so; press it again to open the next changed file. The marks on the right edge show where the changes are; click one to go there. The file tree and the tabs mark changed files (a green A, a blue M, an amber dot for changes that are not committed). In <kbd>Ctrl</kbd> <kbd>P</kbd>, <kbd>Tab</kbd> switches to the changed files, and the "Changes" tab of the side bar lists them with their counts. Blame works in diff mode too: lines that are not committed say so in amber.</p>
+        <p>The diffs are made again when an open file changes on disk and when <code>HEAD</code> or the base branch moves.</p>
       </section>
 
       <section id="clicks">
@@ -319,6 +346,7 @@ reindex = "f5"</code></pre>
             <tr><td><code>~/.cache/rubyscope/</code></td><td>The saved index of each project</td></tr>
             <tr><td><code>~/.local/state/rubyscope/recent.json</code></td><td>The recent projects, up to twelve</td></tr>
             <tr><td><code>~/.local/state/rubyscope/session*.json</code></td><td>The open tabs of each project</td></tr>
+            <tr><td><code>~/.local/state/rubyscope/diff*.json</code></td><td>The base branch of diff mode for each project</td></tr>
           </tbody>
         </table>
         <p>It reads <code>~/.config/rubyscope/keys.toml</code> for keys and the current Omarchy theme for colors.</p>

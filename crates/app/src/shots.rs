@@ -294,6 +294,7 @@ fn fixture() -> PathBuf {
         std::process::Command::new("git").current_dir(&dir).args(args).envs(envs.iter().copied()).output().unwrap();
     };
     git(&["init", "-q"], &[]);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &[]);
     for (author, date, files) in STEPS {
         for (path, code) in *files {
             let p = dir.join(path);
@@ -345,7 +346,9 @@ fn shot(h: &mut Harness<'static, App>, name: &str) {
 fn point(h: &Harness<'static, App>, line: usize, col: usize) -> Pos2 {
     let t = h.state().current().expect("a tab");
     let (origin, row_h, char_w, first) = t.layout.expect("drawn");
-    Pos2::new(origin.x + (col as f32 - 0.5) * char_w, origin.y + (line - 1 - first) as f32 * row_h + row_h * 0.35)
+    // In diff mode, ghost rows sit between the lines.
+    let row = t.row_of_line(line as u32 - 1) as usize;
+    Pos2::new(origin.x + (col as f32 - 0.5) * char_w, origin.y + (row - first) as f32 * row_h + row_h * 0.35)
 }
 
 fn open(h: &mut Harness<'static, App>, root: &Path, rel: &str) {
@@ -493,4 +496,52 @@ fn shots() {
     type_text(&mut h, "orders show");
     settle(&mut h);
     shot(&mut h, "go-to-file");
+
+    // Diff mode: a branch that adds refunds, and a change that is not
+    // committed yet. The last shot, as it changes the shop.
+    diff_branch(&root);
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    press(&mut h, CMD | Modifiers::SHIFT, Key::D);
+    for _ in 0..40 {
+        std::thread::sleep(Duration::from_millis(50));
+        let _ = h.run_ok();
+    }
+    press(&mut h, Modifiers::NONE, Key::CloseBracket);
+    settle(&mut h);
+    shot(&mut h, "diff");
+}
+
+/// Puts the shop on a branch `feature/order-refunds` with one commit, and
+/// changes `order.rb` on disk.
+fn diff_branch(root: &Path) {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .current_dir(root)
+            .args(["-c", "user.name=Eva Lind", "-c", "user.email=eva@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .output()
+            .unwrap();
+    };
+    let order = ORDER_V3
+        .replace(
+            "has_many :line_items, dependent: :destroy\n",
+            "has_many :line_items, dependent: :destroy\n  has_many :refunds, dependent: :restrict_with_error\n",
+        )
+        .replace("shipped: 2 }", "shipped: 2, refunded: 3 }")
+        .replace(
+            "  # Marks the order as shipped",
+            "  # The money that can still go back to the customer, in cents.\n  def refundable_cents\n    total_cents - refunds.sum(:amount_cents)\n  end\n\n  # Marks the order as shipped",
+        );
+    git(&["checkout", "-q", "-b", "feature/order-refunds"]);
+    std::fs::write(root.join("app/models/order.rb"), &order).unwrap();
+    std::fs::write(
+        root.join("app/models/refund.rb"),
+        "# Money that went back to the customer for an order.\nclass Refund < ApplicationRecord\n  belongs_to :order\nend\n",
+    )
+    .unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Add refunds"]);
+    let disk = order.replace("refunds.sum(:amount_cents)", "refunds.succeeded.sum(:amount_cents)");
+    std::fs::write(root.join("app/models/order.rb"), disk).unwrap();
 }

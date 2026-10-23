@@ -31,6 +31,7 @@ CROPS = {
     "commands": (518, 64, 2080, 880),
     "go-to-file": (518, 110, 2080, 330),
     "splash": FULL,
+    "diff": FULL,
 }
 
 

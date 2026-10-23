@@ -50,6 +50,11 @@ pub enum Action {
     OpenOnGitHub,
     ToggleBottomPanel,
     Reindex,
+    ToggleDiff,
+    DiffAgainstBranch,
+    NextChange,
+    PrevChange,
+    GoToChangedFile,
 }
 
 impl Action {
@@ -69,6 +74,11 @@ impl Action {
         Action::TypeHierarchy,
         Action::FileOutline,
         Action::ToggleBlame,
+        Action::ToggleDiff,
+        Action::DiffAgainstBranch,
+        Action::NextChange,
+        Action::PrevChange,
+        Action::GoToChangedFile,
         Action::ToggleSidebar,
         Action::ToggleBottomPanel,
         Action::OpenInEditor,
@@ -109,6 +119,11 @@ impl Action {
             Action::OpenOnGitHub => "open_on_github",
             Action::ToggleBottomPanel => "toggle_bottom_panel",
             Action::Reindex => "reindex",
+            Action::ToggleDiff => "toggle_diff",
+            Action::DiffAgainstBranch => "diff_against_branch",
+            Action::NextChange => "next_change",
+            Action::PrevChange => "prev_change",
+            Action::GoToChangedFile => "go_to_changed_file",
         }
     }
 
@@ -140,7 +155,28 @@ impl Action {
             Action::OpenOnGitHub => "Open this line on GitHub",
             Action::ToggleBottomPanel => "Show or hide the results panel",
             Action::Reindex => "Index the project again, parsing every file",
+            Action::ToggleDiff => "Toggle diff mode",
+            Action::DiffAgainstBranch => "Diff against branch…",
+            Action::NextChange => "Next change",
+            Action::PrevChange => "Previous change",
+            Action::GoToChangedFile => "Go to changed file",
         }
+    }
+
+    /// The default keys. Most actions have one key; the jumps between
+    /// changes have two.
+    fn default_keys(self) -> Vec<&'static str> {
+        match self {
+            Action::NextChange => vec!["]", "alt+down"],
+            Action::PrevChange => vec!["[", "alt+up"],
+            other => other.default_key().into_iter().collect(),
+        }
+    }
+
+    /// Actions that only run when no text field has focus, because their
+    /// keys are also typed as text or move the cursor in a field.
+    pub fn needs_free_keys(self) -> bool {
+        matches!(self, Action::NextChange | Action::PrevChange)
     }
 
     fn default_key(self) -> Option<&'static str> {
@@ -160,6 +196,8 @@ impl Action {
             Action::ClosePopup => "escape",
             Action::ToggleBlame => "cmd+b",
             Action::ToggleSidebar => "cmd+shift+b",
+            // Ctrl+D scrolls half a page, as in Vim.
+            Action::ToggleDiff => "cmd+shift+d",
             _ => return None,
         })
     }
@@ -218,6 +256,9 @@ impl Shortcut {
         }
         parts.push(match self.key {
             Key::Escape => "Esc".to_string(),
+            Key::OpenBracket | Key::CloseBracket => self.key.symbol_or_name().to_string(),
+            Key::ArrowUp => "↑".to_string(),
+            Key::ArrowDown => "↓".to_string(),
             k => k.name().to_string(),
         });
         parts.join("+")
@@ -245,11 +286,17 @@ impl Keymap {
         Keymap::from_table(&custom)
     }
 
+    /// The keys of each action: from `keys.toml` when it has the action
+    /// (one key, or a list of keys), else the defaults.
     pub fn from_table(custom: &toml::Table) -> Keymap {
         let mut bindings = Vec::new();
         for action in Action::ALL {
-            let text = custom.get(action.id()).and_then(|v| v.as_str()).or(action.default_key());
-            if let Some(s) = text.and_then(Shortcut::parse) {
+            let texts: Vec<&str> = match custom.get(action.id()) {
+                Some(toml::Value::String(s)) => vec![s.as_str()],
+                Some(toml::Value::Array(list)) => list.iter().filter_map(|v| v.as_str()).collect(),
+                _ => action.default_keys(),
+            };
+            for s in texts.into_iter().filter_map(Shortcut::parse) {
                 bindings.push((*action, s));
             }
         }
@@ -263,11 +310,22 @@ impl Keymap {
         self.bindings.iter().find(|(a, _)| *a == action).map(|(_, s)| *s)
     }
 
+    /// All the keys of an action, as text, the simplest first: `], Alt+↓`.
+    pub fn labels(&self, action: Action) -> String {
+        let mut keys: Vec<&Shortcut> = self.bindings.iter().filter(|(a, _)| *a == action).map(|(_, s)| s).collect();
+        keys.sort_by_key(|s| s.modifiers.shift as u8 + s.modifiers.alt as u8 + s.modifiers.ctrl as u8);
+        keys.iter().map(|s| s.label()).collect::<Vec<_>>().join(", ")
+    }
+
     /// Takes the pressed shortcuts out of the input and returns their actions.
     pub fn pressed(&self, ctx: &egui::Context) -> Vec<Action> {
         let mut out = Vec::new();
+        let field_has_focus = ctx.memory(|m| m.focused().is_some());
         ctx.input_mut(|input| {
             for (action, s) in &self.bindings {
+                if field_has_focus && action.needs_free_keys() {
+                    continue;
+                }
                 let mut hit = false;
                 input.events.retain(|e| {
                     let egui::Event::Key { key, pressed: true, modifiers, repeat, .. } = e else { return true };
@@ -285,7 +343,7 @@ impl Keymap {
                     }
                     !same
                 });
-                if hit {
+                if hit && !out.contains(action) {
                     out.push(*action);
                 }
             }
@@ -323,5 +381,17 @@ mod tests {
         let k = Keymap::from_table(&table);
         assert!(k.shortcut(Action::ToggleBlame).unwrap().modifiers.alt);
         assert_eq!(k.shortcut(Action::GoToFile).unwrap().label(), format!("{CMD}+P"));
+    }
+
+    #[test]
+    fn diff_keys() {
+        let k = Keymap::from_table(&toml::Table::new());
+        assert_eq!(k.shortcut(Action::ToggleDiff).unwrap().label(), format!("{CMD}+Shift+D"));
+        assert_eq!(k.labels(Action::NextChange), "], Alt+↓");
+        assert_eq!(k.labels(Action::PrevChange), "[, Alt+↑");
+        // A list of keys in keys.toml.
+        let table: toml::Table = "next_change = [\"n\", \"alt+j\"]".parse().unwrap();
+        let k = Keymap::from_table(&table);
+        assert_eq!(k.labels(Action::NextChange), "N, Alt+J");
     }
 }

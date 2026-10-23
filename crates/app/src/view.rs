@@ -1,13 +1,19 @@
 //! The code view: an open file, drawn row by row.
+//!
+//! A row is a line of the file, or in diff mode a removed line (a "ghost
+//! row") from the [`RowMap`]. The scroll area counts rows; everything else
+//! (the cursor, the selection, find, go to line) counts file lines and
+//! byte offsets, and turns them into rows only to draw and to scroll.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use eframe::egui::{
-    self, Align2, Color32, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, TextFormat, Vec2, text::LayoutJob,
+    self, Align2, Color32, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, TextFormat, Vec2, text::LayoutJob,
 };
 use rubyscope_index::model::Span;
 
+use crate::diff::{DisplayRow, FileDiff, LineMark, RowMap, RunKind};
 use crate::git::Blame;
 use crate::highlight::LineTokens;
 use crate::theme::{Theme, Token};
@@ -31,6 +37,10 @@ const KEY_LINES: f32 = 3.0;
 const KEY_COLUMNS: f32 = 8.0;
 /// The time between the two presses of `gg`, in seconds.
 const GG_DELAY: f64 = 1.0;
+/// The width of the change marks on the right edge in diff mode.
+pub const CHANGE_MAP_WIDTH: f32 = 14.0;
+/// How long the pointer rests on a removed line before its tooltip shows.
+const GHOST_TIP_DELAY: f64 = 0.45;
 
 #[derive(Debug, Default)]
 pub struct FindState {
@@ -52,11 +62,25 @@ pub struct OpenFile {
     pub highlights: Option<Arc<Vec<LineTokens>>>,
     pub blame: Option<Arc<Blame>>,
     pub blame_requested: bool,
+    /// Diff mode: the diffs of this file, once they are made.
+    pub diff: Option<Arc<FileDiff>>,
+    /// A diff is being made for this file.
+    pub diff_requested: bool,
+    /// Diff mode: the rows with the removed lines. None shows one row per line.
+    pub rows: Option<Arc<RowMap>>,
+    /// The change that `]` and `[` went to (an index into `RowMap::changes`).
+    pub change: Option<usize>,
+    /// Go to the first (1) or last (-1) change when the diff is ready.
+    pub pending_change: Option<i8>,
     /// Set to scroll so this 0-based line is near the top.
     pub scroll_to_line: Option<u32>,
+    /// Set to scroll to a row, with this part of the view above it.
+    pub scroll_to_row: Option<(u32, f32)>,
     /// A line to flash after a jump, with the time it started.
     pub flash: Option<(u32, f64)>,
+    /// The first visible line, and the first visible row.
     pub top_line: u32,
+    pub top_row: u32,
     /// The last place clicked: actions like "find usages" use it.
     pub cursor: Option<u32>,
     pub selection: Option<(u32, u32)>,
@@ -64,15 +88,17 @@ pub struct OpenFile {
     pub find: FindState,
     /// Where the pointer rests, and since when (for the hover popup).
     pub hover: Option<(u32, f64)>,
+    /// The ghost row under the pointer, and since when (for its tooltip).
+    ghost_hover: Option<(u32, f64)>,
     /// The last layout: where the first visible row's text starts, the row
-    /// height, the char width, and the first visible line. Tests use it to
+    /// height, the char width, and the first visible row. Tests use it to
     /// click on a line and column.
     pub layout: Option<(Pos2, f32, f32, usize)>,
     /// The scroll offset, the largest offset and the visible size, from the
     /// last frame. The scroll keys use them.
     pub scroll: Vec2,
     scroll_max: Vec2,
-    view_size: Vec2,
+    pub view_size: Vec2,
     /// When the first `g` of `gg` was pressed.
     pending_g: Option<f64>,
     /// Digits typed before `g`: `500g` goes to line 500.
@@ -104,14 +130,22 @@ impl OpenFile {
             highlights: None,
             blame: None,
             blame_requested: false,
+            diff: None,
+            diff_requested: false,
+            rows: None,
+            change: None,
+            pending_change: None,
             scroll_to_line: None,
+            scroll_to_row: None,
             flash: None,
             top_line: 0,
+            top_row: 0,
             cursor: None,
             selection: None,
             drag_anchor: None,
             find: FindState::default(),
             hover: None,
+            ghost_hover: None,
             layout: None,
             scroll: Vec2::ZERO,
             scroll_max: Vec2::ZERO,
@@ -133,6 +167,58 @@ impl OpenFile {
     /// The byte offset of the start of a 0-based line.
     pub fn line_start(&self, line: u32) -> u32 {
         self.lines.get(line as usize).map(|l| l.0).unwrap_or(0)
+    }
+
+    /// The number of rows in the view: the lines, and the ghost rows in
+    /// diff mode.
+    pub fn row_count(&self) -> usize {
+        self.rows.as_ref().map_or(self.lines.len(), |m| m.rows.len())
+    }
+
+    pub fn row(&self, row: usize) -> DisplayRow {
+        match &self.rows {
+            Some(m) => m.rows.get(row).copied().unwrap_or(DisplayRow::Line(row as u32)),
+            None => DisplayRow::Line(row as u32),
+        }
+    }
+
+    /// The row that shows a 0-based line.
+    pub fn row_of_line(&self, line: u32) -> u32 {
+        let line = line.min(self.lines.len().saturating_sub(1) as u32);
+        match &self.rows {
+            Some(m) => m.line_row.get(line as usize).copied().unwrap_or(line),
+            None => line,
+        }
+    }
+
+    /// The line a row shows. A ghost row gives the line after it.
+    pub fn line_of_row(&self, row: u32) -> u32 {
+        match &self.rows {
+            Some(m) => m.line_of_row(row),
+            None => row.min(self.lines.len().saturating_sub(1) as u32),
+        }
+    }
+
+    /// The number of lines for git: without the empty part after the last
+    /// newline.
+    pub fn git_lines(&self) -> u32 {
+        crate::diff::git_line_count(&self.text)
+    }
+
+    /// Shows the rows of the diff (in diff mode) or one row per line. The
+    /// line at the top of the view stays at the top.
+    pub fn set_rows(&mut self, on: bool) {
+        let rows = match (&self.diff, on) {
+            (Some(d), true) => Some(Arc::new(RowMap::build(d, self.git_lines(), self.lines.len() as u32))),
+            _ => None,
+        };
+        let top = self.top_line;
+        let was_drawn = self.layout.is_some();
+        self.rows = rows;
+        self.change = self.change.filter(|c| self.rows.as_ref().is_some_and(|m| *c < m.changes.len()));
+        if was_drawn && self.scroll_to_line.is_none() && self.scroll_to_row.is_none() && self.scroll.y > 0.0 {
+            self.scroll_to_row = Some((self.row_of_line(top), 0.0));
+        }
     }
 
     pub fn selected_text(&self) -> Option<String> {
@@ -180,6 +266,8 @@ pub struct ViewEvents {
     pub hover: Option<(u32, Pos2)>,
     /// A click on a blame block: the commit.
     pub blame_click: Option<String>,
+    /// Ctrl+click on a removed line, which has no links.
+    pub ghost_click: bool,
 }
 
 /// The code view needs to ask the index what is clickable.
@@ -195,12 +283,11 @@ struct Row {
     byte_of_char: Vec<u32>,
 }
 
-fn build_row(file: &OpenFile, line: usize, theme: &Theme, font: &FontId) -> Row {
-    let (start, end) = file.lines[line];
-    let text = &file.text[start as usize..end as usize];
+/// Lays out a line of text that starts at byte `start` of the file, with
+/// its syntax colors.
+fn layout_row(text: &str, start: u32, tokens: Option<&LineTokens>, fmt: &dyn Fn(Token) -> TextFormat) -> Row {
     let mut job = LayoutJob::default();
     let mut byte_of_char = Vec::with_capacity(text.len() + 1);
-    let fmt = |token: Token| TextFormat { font_id: font.clone(), color: theme.token(token), ..Default::default() };
     let push = |from: usize, to: usize, token: Token, job: &mut LayoutJob, map: &mut Vec<u32>| {
         let piece = &text[from..to];
         let mut display = String::with_capacity(piece.len());
@@ -218,25 +305,42 @@ fn build_row(file: &OpenFile, line: usize, theme: &Theme, font: &FontId) -> Row 
         }
         job.append(&display, 0.0, fmt(token));
     };
-    let tokens = file.highlights.as_ref().and_then(|h| h.get(line));
     let mut pos = 0usize;
     if let Some(tokens) = tokens {
         for (s, e, t) in tokens {
             let (s, e) = ((*s as usize).min(text.len()), (*e as usize).min(text.len()));
-            if s > pos {
+            if s > pos && text.is_char_boundary(pos) && text.is_char_boundary(s) {
                 push(pos, s, Token::Plain, &mut job, &mut byte_of_char);
             }
-            if e > s && text.is_char_boundary(s) && text.is_char_boundary(e) {
+            if e > s && s >= pos && text.is_char_boundary(s) && text.is_char_boundary(e) {
                 push(s, e, *t, &mut job, &mut byte_of_char);
                 pos = e;
             }
         }
     }
-    if pos < text.len() {
+    if pos < text.len() && text.is_char_boundary(pos) {
         push(pos, text.len(), Token::Plain, &mut job, &mut byte_of_char);
     }
-    byte_of_char.push(end);
+    byte_of_char.push(start + text.len() as u32);
     Row { job, byte_of_char }
+}
+
+fn build_row(file: &OpenFile, line: usize, theme: &Theme, font: &FontId) -> Row {
+    let (start, end) = file.lines[line];
+    let text = &file.text[start as usize..end as usize];
+    let fmt = |token: Token| TextFormat { font_id: font.clone(), color: theme.token(token), ..Default::default() };
+    layout_row(text, start, file.highlights.as_ref().and_then(|h| h.get(line)), &fmt)
+}
+
+/// A removed line: its colors at half strength, struck through.
+fn build_ghost_row(text: &str, tokens: &LineTokens, strike: Color32, theme: &Theme, font: &FontId) -> Row {
+    let fmt = |token: Token| TextFormat {
+        font_id: font.clone(),
+        color: theme.token(token).gamma_multiply(0.5),
+        strikethrough: Stroke::new(1.0, strike),
+        ..Default::default()
+    };
+    layout_row(text, 0, Some(tokens), &fmt)
 }
 
 impl Row {
@@ -256,7 +360,132 @@ fn char_width(ui: &egui::Ui) -> f32 {
     ui.fonts_mut(|f| f.glyph_width(&font, 'M'))
 }
 
-/// Draws the file and handles the pointer. `blame` shows the blame column.
+/// The diff colors, from the theme: green on the branch, red for removed
+/// lines, amber for what is not committed.
+struct DiffColors {
+    added: Color32,
+    removed: Color32,
+    amber: Color32,
+}
+
+impl DiffColors {
+    fn new(theme: &Theme) -> DiffColors {
+        DiffColors { added: theme.green, removed: theme.red, amber: theme.yellow }
+    }
+
+    /// The row background and the gutter bar of a row.
+    fn of_row(&self, map: &RowMap, row: DisplayRow) -> Option<(Color32, Color32, bool)> {
+        match row {
+            DisplayRow::Line(l) => match map.marks.get(l as usize).copied().unwrap_or_default() {
+                LineMark::None => None,
+                LineMark::Branch => Some((self.added.gamma_multiply(0.09), self.added, false)),
+                LineMark::Uncommitted => Some((self.amber.gamma_multiply(0.12), self.amber, false)),
+            },
+            DisplayRow::Ghost(g) if map.ghosts[g as usize].uncommitted => {
+                Some((self.amber.gamma_multiply(0.07), self.amber, true))
+            }
+            DisplayRow::Ghost(_) => Some((self.removed.gamma_multiply(0.095), self.removed, false)),
+        }
+    }
+
+    fn of_run(&self, kind: RunKind) -> Color32 {
+        match kind {
+            RunKind::Added => self.added,
+            RunKind::Removed => self.removed,
+            RunKind::Uncommitted => self.amber,
+        }
+    }
+}
+
+/// A vertical bar of dashes: the gutter bar of a line removed in the
+/// working tree.
+fn dashed_bar(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let mut y = rect.top();
+    while y < rect.bottom() {
+        let r = Rect::from_min_max(Pos2::new(rect.left(), y), Pos2::new(rect.right(), (y + 4.0).min(rect.bottom())));
+        painter.rect_filled(r, 0.0, color);
+        y += 7.0;
+    }
+}
+
+/// Thin diagonal stripes: the blame cell of a ghost row, which has no
+/// commit.
+fn hatch(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let p = painter.with_clip_rect(rect.intersect(painter.clip_rect()));
+    let mut x = rect.left() - rect.height();
+    while x < rect.right() {
+        p.line_segment(
+            [Pos2::new(x, rect.bottom()), Pos2::new(x + rect.height(), rect.top())],
+            Stroke::new(3.0, color),
+        );
+        x += 8.0;
+    }
+}
+
+/// A part of the chip in the corner of the code view.
+enum Chip {
+    Text(String, Color32),
+    Key(&'static str),
+    Sep,
+}
+
+/// Draws a chip with its bottom right corner at `corner`.
+fn draw_chip(painter: &egui::Painter, theme: &Theme, corner: Pos2, parts: &[Chip]) {
+    let font = FontId::proportional(13.0);
+    let key_font = FontId::monospace(12.0);
+    let gap = 7.0;
+    let items: Vec<(Option<Arc<egui::Galley>>, f32)> = parts
+        .iter()
+        .map(|p| match p {
+            Chip::Text(t, c) => {
+                let g = painter.layout_no_wrap(t.clone(), font.clone(), *c);
+                let w = g.size().x;
+                (Some(g), w)
+            }
+            Chip::Key(t) => {
+                let g = painter.layout_no_wrap(t.to_string(), key_font.clone(), theme.fg_bright);
+                let w = g.size().x + 10.0;
+                (Some(g), w)
+            }
+            Chip::Sep => (None, 1.0),
+        })
+        .collect();
+    let width: f32 = items.iter().map(|(_, w)| w).sum::<f32>() + gap * (items.len().saturating_sub(1)) as f32 + 22.0;
+    let rect = Rect::from_min_max(corner - Vec2::new(width, 28.0), corner);
+    painter.rect_filled(rect.translate(Vec2::new(0.0, 3.0)).expand(2.0), 8.0, Color32::from_black_alpha(60));
+    painter.rect(rect, 6.0, theme.bg_light, Stroke::new(1.0, theme.muted), StrokeKind::Inside);
+    let mut x = rect.left() + 11.0;
+    let cy = rect.center().y;
+    for (part, (galley, w)) in parts.iter().zip(items) {
+        match (part, galley) {
+            (Chip::Text(_, c), Some(g)) => {
+                painter.galley(Pos2::new(x, cy - g.size().y / 2.0), g, *c);
+            }
+            (Chip::Key(_), Some(g)) => {
+                let r = Rect::from_min_size(Pos2::new(x, cy - 9.0), Vec2::new(w, 18.0));
+                painter.rect(r, 4.0, theme.bg_light, Stroke::new(1.0, theme.muted), StrokeKind::Inside);
+                painter.galley(Pos2::new(x + 5.0, cy - g.size().y / 2.0), g, theme.fg_bright);
+            }
+            _ => {
+                painter.line_segment([Pos2::new(x, cy - 7.0), Pos2::new(x, cy + 7.0)], Stroke::new(1.0, theme.muted));
+            }
+        }
+        x += w + gap;
+    }
+}
+
+/// Diff mode, for the code view.
+pub struct DiffMode<'a> {
+    /// The base branch.
+    pub base: &'a str,
+    /// Why this file has no diff (not a git repository, a gem file), for
+    /// the chip in the corner. None while the diff is being made.
+    pub note: Option<&'a str>,
+}
+
+/// Draws the file and handles the pointer. `show_blame` shows the blame
+/// column. In diff mode the view also shows the change marks on the right
+/// edge and the chip with the number of changes.
 pub fn code_view(
     ui: &mut egui::Ui,
     file: &mut OpenFile,
@@ -264,7 +493,9 @@ pub fn code_view(
     links: Option<&dyn Clickable>,
     show_blame: bool,
     now_secs: i64,
+    diff: Option<DiffMode>,
 ) -> ViewEvents {
+    let diff_base = diff.as_ref().map(|d| d.base);
     let mut events = ViewEvents::default();
     let font = FontId::monospace(FONT_SIZE);
     let row_h = row_height(ui);
@@ -281,9 +512,12 @@ pub fn code_view(
     };
     let gutter_w = digits as f32 * char_w + 24.0;
     let code_x = blame_w + gutter_w;
-    let width = code_x + (file.max_line_chars as f32 + 4.0) * char_w;
+    let map = file.rows.clone();
+    let max_chars = file.max_line_chars.max(map.as_ref().map_or(0, |m| m.max_ghost_chars));
+    let width = code_x + (max_chars as f32 + 4.0) * char_w;
     let time = ui.input(|i| i.time);
     let ctrl = ui.input(|i| crate::keys::cmd_held(i.modifiers));
+    let colors = DiffColors::new(theme);
 
     let mut area = egui::ScrollArea::both()
         .auto_shrink([false, false])
@@ -297,41 +531,107 @@ pub fn code_view(
         area = area.scroll_offset(to);
     }
     if let Some(line) = file.scroll_to_line.take() {
-        area = area.vertical_scroll_offset((line.saturating_sub(6)) as f32 * row_h);
+        area = area.vertical_scroll_offset(file.row_of_line(line).saturating_sub(6) as f32 * row_h);
     }
-    let total = file.lines.len();
-    ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, theme.bg);
-    let output = area.show_rows(ui, row_h, total, |ui, range| {
-        file.top_line = range.start as u32;
+    if let Some((row, above)) = file.scroll_to_row.take() {
+        area = area.vertical_scroll_offset((row as f32 * row_h - file.view_size.y * above).max(0.0));
+    }
+    let total = file.row_count();
+    let full = ui.available_rect_before_wrap();
+    let map_w = if diff_base.is_some() { CHANGE_MAP_WIDTH } else { 0.0 };
+    let code_rect = Rect::from_min_max(full.min, Pos2::new(full.right() - map_w, full.bottom()));
+    ui.painter().rect_filled(full, 0.0, theme.bg);
+    let mut code_ui = ui.new_child(egui::UiBuilder::new().max_rect(code_rect));
+    // `show_rows` counts each row as its height plus the item spacing. The
+    // rows are drawn with no space between them, so the spacing must be 0
+    // for a scroll offset of `row * row_h` to show that row at the top.
+    code_ui.spacing_mut().item_spacing.y = 0.0;
+    let output = area.show_rows(&mut code_ui, row_h, total, |ui, range| {
+        file.top_row = range.start as u32;
+        file.top_line = file.line_of_row(range.start as u32);
+        let kinds: Vec<DisplayRow> = range.clone().map(|r| file.row(r)).collect();
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(width.max(ui.available_width()), row_h * range.len() as f32),
             Sense::click_and_drag(),
         );
         let painter = ui.painter_at(ui.clip_rect());
-        let rows: Vec<Row> = range.clone().map(|l| build_row(file, l, theme, &font)).collect();
+        let rows: Vec<Row> = kinds
+            .iter()
+            .map(|k| match (*k, &map) {
+                (DisplayRow::Ghost(g), Some(m)) => {
+                    let ghost = &m.ghosts[g as usize];
+                    let strike = if ghost.uncommitted { colors.amber } else { colors.removed };
+                    build_ghost_row(&ghost.text, &ghost.tokens, strike.gamma_multiply(0.6), theme, &font)
+                }
+                (DisplayRow::Line(l), _) => build_row(file, l as usize, theme, &font),
+                (DisplayRow::Ghost(_), None) => layout_row("", 0, None, &|_| TextFormat::default()),
+            })
+            .collect();
         let galleys: Vec<_> = rows.iter().map(|r| ui.fonts_mut(|f| f.layout_job(r.job.clone()))).collect();
         let row_top = |i: usize| rect.top() + i as f32 * row_h;
         let text_pos = |i: usize| Pos2::new(rect.left() + code_x, row_top(i) + (row_h - FONT_SIZE * 1.2) / 2.0);
         file.layout = Some((text_pos(0), row_h, char_w, range.start));
+        let line_at_row = |i: usize| match kinds.get(i) {
+            Some(DisplayRow::Line(l)) => Some(*l as usize),
+            _ => None,
+        };
+        let row_at = |pos: Pos2| -> Option<usize> {
+            let i = ((pos.y - rect.top()) / row_h).floor();
+            (i >= 0.0 && (i as usize) < kinds.len()).then_some(i as usize)
+        };
+        // The line under the pointer (in any column): for the blame column.
+        let line_at = |pos: Pos2| row_at(pos).and_then(line_at_row);
+        // A ghost row under the pointer, in the code part of the row.
+        let ghost_at = |pos: Pos2| {
+            row_at(pos).filter(|i| pos.x >= rect.left() + blame_w && matches!(kinds[*i], DisplayRow::Ghost(_)))
+        };
 
-        // The pointer as a file offset.
+        // The pointer as a file offset. Ghost rows have none.
         let offset_at = |pos: Pos2| -> Option<u32> {
             if pos.x < rect.left() + code_x {
                 return None;
             }
-            let i = ((pos.y - rect.top()) / row_h).floor();
-            if i < 0.0 || i as usize >= rows.len() {
-                return None;
-            }
-            let i = i as usize;
+            let i = row_at(pos)?;
+            line_at_row(i)?;
             let local = pos - text_pos(i);
             let c = galleys[i].cursor_from_pos(Vec2::new(local.x, galleys[i].size().y / 2.0)).index.0;
             rows[i].byte_of_char.get(c).copied()
         };
+        // While selecting, a ghost row counts as the start of the next line.
+        let next_line_start: Vec<u32> =
+            (0..kinds.len()).map(|i| file.line_start(file.line_of_row((range.start + i) as u32))).collect();
+        let drag_offset = |pos: Pos2| -> Option<u32> {
+            offset_at(pos).or_else(|| {
+                let i = row_at(pos)?;
+                (pos.x >= rect.left() + code_x).then(|| next_line_start[i])
+            })
+        };
 
-        // Backgrounds: the flash line, find matches, the selection.
-        for (i, line) in range.clone().enumerate() {
+        // Backgrounds: the diff colors, the flash line, find matches, the
+        // selection.
+        for (i, kind) in kinds.iter().enumerate() {
             let y = row_top(i);
+            if let Some(m) = &map
+                && let Some((bg, bar, dashed)) = colors.of_row(m, *kind)
+            {
+                let left = rect.left() + blame_w;
+                painter.rect_filled(
+                    Rect::from_min_max(
+                        Pos2::new(left, y),
+                        Pos2::new(rect.right().max(ui.clip_rect().right()), y + row_h),
+                    ),
+                    0.0,
+                    bg,
+                );
+                let bx = left + gutter_w - 6.0;
+                let bar_rect = Rect::from_min_max(Pos2::new(bx, y), Pos2::new(bx + 3.0, y + row_h));
+                if dashed {
+                    dashed_bar(&painter, bar_rect, bar);
+                } else {
+                    painter.rect_filled(bar_rect, 1.0, bar);
+                }
+            }
+            let Some(line) = line_at_row(i) else { continue };
             if let Some((fl, started)) = file.flash
                 && fl as usize == line
             {
@@ -384,31 +684,39 @@ pub fn code_view(
 
         // Blame column, as in RubyMine: the date and the author's last name
         // on each line. The lines of the commit under the pointer, or else
-        // of the cursor line, have brighter text.
+        // of the cursor line, have brighter text. Lines that are not
+        // committed say so in amber; ghost rows have no commit.
         if let (true, Some(blame)) = (show_blame, file.blame.clone()) {
-            let line_at = |pos: Pos2| range.start + ((pos.y - rect.top()) / row_h) as usize;
             let active = response
                 .hover_pos()
                 .filter(|p| p.x < rect.left() + blame_w)
-                .map(line_at)
+                .and_then(line_at)
                 .or(file.cursor.map(|c| file.line_of(c) as usize))
                 .and_then(|l| blame.lines.get(l).copied());
             let blame_font = FontId::monospace(FONT_SIZE * BLAME_FONT);
-            for (i, line) in range.clone().enumerate() {
-                let Some(c) = blame.lines.get(line).copied() else { break };
-                let commit = &blame.commits[c as usize];
-                // Lines that are not committed yet stay empty.
-                if commit.is_uncommitted() {
-                    continue;
-                }
+            for (i, kind) in kinds.iter().enumerate() {
                 let r = Rect::from_min_size(Pos2::new(rect.left(), row_top(i)), Vec2::new(blame_w - 6.0, row_h));
-                painter.rect_filled(r, 0.0, theme.blame_color(commit.rank));
-                let name: String = commit.last_name().chars().take(BLAME_NAME_CHARS).collect();
-                let color = if active == Some(c) { theme.fg_bright } else { theme.fg.gamma_multiply(0.7) };
+                let line = match kind {
+                    DisplayRow::Ghost(_) => {
+                        hatch(&painter, r, theme.muted.gamma_multiply(0.3));
+                        continue;
+                    }
+                    DisplayRow::Line(l) => *l as usize,
+                };
+                let Some(c) = blame.lines.get(line).copied() else { continue };
+                let commit = &blame.commits[c as usize];
+                let (bg, text, color) = if commit.is_uncommitted() {
+                    (theme.yellow.gamma_multiply(0.16), "not committed".to_string(), theme.yellow)
+                } else {
+                    let name: String = commit.last_name().chars().take(BLAME_NAME_CHARS).collect();
+                    let color = if active == Some(c) { theme.fg_bright } else { theme.fg.gamma_multiply(0.7) };
+                    (theme.blame_color(commit.rank), format!("{:<10} {name}", commit.short_date(now_secs)), color)
+                };
+                painter.rect_filled(r, 0.0, bg);
                 painter.text(
                     Pos2::new(r.left() + 8.0, r.center().y),
                     Align2::LEFT_CENTER,
-                    format!("{:<10} {name}", commit.short_date(now_secs)),
+                    text,
                     blame_font.clone(),
                     color,
                 );
@@ -423,14 +731,24 @@ pub fn code_view(
             );
         }
 
-        // Line numbers.
+        // Line numbers. A ghost row has a dim minus.
         let cursor_line = file.cursor.map(|c| file.line_of(c) as usize);
-        for (i, line) in range.clone().enumerate() {
-            let color = if Some(line) == cursor_line { theme.fg } else { theme.muted };
+        for (i, kind) in kinds.iter().enumerate() {
+            let (text, color) = match (kind, &map) {
+                (DisplayRow::Line(l), _) => {
+                    let line = *l as usize;
+                    ((line + 1).to_string(), if Some(line) == cursor_line { theme.fg } else { theme.muted })
+                }
+                (DisplayRow::Ghost(g), Some(m)) => {
+                    let c = if m.ghosts[*g as usize].uncommitted { colors.amber } else { colors.removed };
+                    ("−".to_string(), c.gamma_multiply(0.8))
+                }
+                (DisplayRow::Ghost(_), None) => continue,
+            };
             painter.text(
                 Pos2::new(rect.left() + blame_w + gutter_w - 12.0, row_top(i) + row_h / 2.0),
                 Align2::RIGHT_CENTER,
-                (line + 1).to_string(),
+                text,
                 font.clone(),
                 color,
             );
@@ -441,6 +759,33 @@ pub fn code_view(
             painter.galley(text_pos(i), g.clone(), theme.fg);
         }
 
+        // The change that `]` and `[` went to has a frame.
+        if let (Some(m), Some(c)) = (&map, file.change)
+            && let Some(&(a, b)) = m.changes.get(c)
+        {
+            let (a, b) = (a as usize, b as usize);
+            if a < range.end && b >= range.start {
+                let top = row_top(a.max(range.start) - range.start);
+                let bottom = row_top(b.min(range.end - 1) - range.start) + row_h;
+                let clip = ui.clip_rect();
+                let frame = Rect::from_min_max(
+                    Pos2::new(rect.left() + blame_w + 1.0, top),
+                    Pos2::new(clip.right() - 2.0, bottom),
+                );
+                painter.rect_stroke(frame, 3.0, Stroke::new(1.0, theme.accent), StrokeKind::Inside);
+                if a >= range.start {
+                    let label = format!("change {} of {}", c + 1, m.changes.len());
+                    let g = painter.layout_no_wrap(label, FontId::proportional(11.5), theme.bg_dark);
+                    let lr = Rect::from_min_size(
+                        Pos2::new(frame.right() - g.size().x - 18.0, (top - 9.0).max(clip.top())),
+                        g.size() + Vec2::new(12.0, 2.0),
+                    );
+                    painter.rect_filled(lr, 3.0, theme.accent);
+                    painter.galley(lr.min + Vec2::new(6.0, 1.0), g, theme.bg_dark);
+                }
+            }
+        }
+
         // Pointer.
         let pointer = response.hover_pos();
         let hovered = pointer.and_then(offset_at);
@@ -448,9 +793,9 @@ pub fn code_view(
             if let Some(span) = links.clickable_at(off) {
                 if ctrl {
                     ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-                    let line = file.line_of(span.start) as usize;
-                    if range.contains(&line) {
-                        let i = line - range.start;
+                    let row = file.row_of_line(file.line_of(span.start)) as usize;
+                    if range.contains(&row) {
+                        let i = row - range.start;
                         let ca = rows[i].char_of(span.start);
                         let cb = rows[i].char_of(span.end);
                         let xa = galleys[i].pos_from_cursor(egui::text::CCursor::new(ca)).left();
@@ -485,17 +830,64 @@ pub fn code_view(
             file.hover = None;
         }
 
+        // A removed line: a tooltip says why it has no links.
+        match (pointer.and_then(ghost_at), &map) {
+            (Some(i), Some(m)) => {
+                let row = (range.start + i) as u32;
+                let since = match file.ghost_hover {
+                    Some((r, since)) if r == row => since,
+                    _ => {
+                        file.ghost_hover = Some((row, time));
+                        time
+                    }
+                };
+                if ctrl {
+                    ui.ctx().set_cursor_icon(CursorIcon::NotAllowed);
+                }
+                if ctrl || time - since > GHOST_TIP_DELAY {
+                    let uncommitted = matches!(kinds[i], DisplayRow::Ghost(g) if m.ghosts[g as usize].uncommitted);
+                    let (color, body) = if uncommitted {
+                        (
+                            colors.amber,
+                            "Removed in the working tree (not committed). It is not in the file on disk, \
+                             so Ctrl+click has nothing to go to here."
+                                .to_string(),
+                        )
+                    } else {
+                        (
+                            colors.removed,
+                            format!(
+                                "Removed on this branch since the merge-base with {}. It is not in the file \
+                                 on disk, so Ctrl+click has nothing to go to here.",
+                                diff_base.unwrap_or("the base branch")
+                            ),
+                        )
+                    };
+                    let pos = pointer.unwrap_or_default();
+                    egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("ghost-tip"), pos)
+                        .show(|ui| {
+                            ui.set_max_width(360.0);
+                            ui.label(egui::RichText::new("Removed line, not in the index").color(color));
+                            ui.label(egui::RichText::new(body).color(theme.fg_dim).size(12.5));
+                        });
+                } else {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
+                }
+            }
+            _ => file.ghost_hover = None,
+        }
+
         // The drag starts only after the pointer moves a few pixels, so the
         // selection starts where the button went down, not where it is now.
         if response.drag_started_by(egui::PointerButton::Primary)
             && !ctrl
-            && let Some(off) = ui.input(|i| i.pointer.press_origin()).and_then(offset_at)
+            && let Some(off) = ui.input(|i| i.pointer.press_origin()).and_then(drag_offset)
         {
             file.drag_anchor = Some(off);
             file.selection = Some((off, off));
         }
         if response.dragged_by(egui::PointerButton::Primary)
-            && let (Some(anchor), Some(off)) = (file.drag_anchor, response.interact_pointer_pos().and_then(offset_at))
+            && let (Some(anchor), Some(off)) = (file.drag_anchor, response.interact_pointer_pos().and_then(drag_offset))
         {
             file.selection = Some((anchor, off));
         }
@@ -511,16 +903,20 @@ pub fn code_view(
                 } else {
                     file.selection = None;
                 }
+            } else if ghost_at(pos).is_some() {
+                if ctrl {
+                    events.ghost_click = true;
+                } else {
+                    file.selection = None;
+                }
             } else if show_blame
                 && pos.x < rect.left() + blame_w
                 && let Some(blame) = &file.blame
+                && let Some(line) = line_at(pos)
+                && let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
+                && !commit.is_uncommitted()
             {
-                let line = range.start + ((pos.y - rect.top()) / row_h) as usize;
-                if let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
-                    && !commit.is_uncommitted()
-                {
-                    events.blame_click = Some(commit.sha.clone());
-                }
+                events.blame_click = Some(commit.sha.clone());
             }
         }
         if response.double_clicked()
@@ -539,28 +935,135 @@ pub fn code_view(
         if show_blame
             && let (Some(pos), Some(blame)) = (pointer, &file.blame)
             && pos.x < rect.left() + blame_w
+            && let Some(line) = line_at(pos)
+            && let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
         {
-            let line = range.start + ((pos.y - rect.top()) / row_h) as usize;
-            if let Some(commit) = blame.lines.get(line).map(|c| &blame.commits[*c as usize])
-                && !commit.is_uncommitted()
-            {
+            let text = if commit.is_uncommitted() {
+                "Not committed yet".to_string()
+            } else {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-                let text = format!(
+                format!(
                     "{}\n{} · {}\n{}\n\nClick to open on GitHub",
                     commit.summary,
                     commit.author,
                     crate::git::relative_time(commit.time, now_secs),
                     &commit.sha[..commit.sha.len().min(12)]
-                );
-                egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("blame-tip"), pos)
-                    .show(|ui| ui.label(text));
-            }
+                )
+            };
+            egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("blame-tip"), pos)
+                .show(|ui| ui.label(text));
         }
     });
     file.scroll = output.state.clamped_offset();
     file.view_size = output.inner_rect.size();
     file.scroll_max = (output.content_size - file.view_size).max(Vec2::ZERO);
+    ui.advance_cursor_after_rect(full);
+
+    if let Some(base) = diff_base {
+        change_map(ui, file, theme, &colors, full, output.inner_rect, output.content_size.y, row_h);
+        let parts: Vec<Chip> = match &file.rows {
+            None => {
+                let note = diff.as_ref().and_then(|d| d.note).unwrap_or("Making the diff…");
+                vec![Chip::Text(note.into(), theme.fg_dim)]
+            }
+            Some(m) if m.changes.is_empty() => {
+                vec![
+                    Chip::Text("No changes in this file vs".into(), theme.fg),
+                    Chip::Text(base.into(), theme.fg_bright),
+                ]
+            }
+            Some(m) => {
+                let n = m.changes.len();
+                let mut parts = match file.change {
+                    Some(c) => vec![
+                        Chip::Text("change".into(), theme.fg),
+                        Chip::Text(format!("{}/{n}", c + 1), theme.fg_bright),
+                    ],
+                    None => vec![
+                        Chip::Text(n.to_string(), theme.fg_bright),
+                        Chip::Text(if n == 1 { "change" } else { "changes" }.into(), theme.fg),
+                    ],
+                };
+                parts.extend([
+                    Chip::Sep,
+                    Chip::Key("]"),
+                    Chip::Text("next".into(), theme.fg),
+                    Chip::Key("["),
+                    Chip::Text("previous".into(), theme.fg),
+                ]);
+                parts
+            }
+        };
+        let corner = Pos2::new(output.inner_rect.right() - 14.0, output.inner_rect.bottom() - 12.0);
+        draw_chip(ui.painter(), theme, corner, &parts);
+    }
     events
+}
+
+/// The marks on the right edge in diff mode: where each change is in the
+/// file. A click on a mark goes to that change; a click elsewhere scrolls
+/// there.
+#[allow(clippy::too_many_arguments)]
+fn change_map(
+    ui: &mut egui::Ui,
+    file: &mut OpenFile,
+    theme: &Theme,
+    colors: &DiffColors,
+    full: Rect,
+    view: Rect,
+    content_h: f32,
+    row_h: f32,
+) {
+    let strip = Rect::from_min_max(Pos2::new(full.right() - CHANGE_MAP_WIDTH, full.top()), full.max);
+    let painter = ui.painter_at(strip);
+    painter.rect_filled(strip, 0.0, theme.bg);
+    painter.line_segment([strip.left_top(), strip.left_bottom()], Stroke::new(1.0, theme.muted.gamma_multiply(0.35)));
+    let h = strip.height();
+    let total = (file.row_count() as f32).max(view.height() / row_h).max(1.0);
+    if content_h > view.height() + 2.0 {
+        let top = strip.top() + file.scroll.y / content_h * h;
+        let thumb = Rect::from_min_size(
+            Pos2::new(strip.left() + 2.0, top),
+            Vec2::new(CHANGE_MAP_WIDTH - 4.0, (view.height() / content_h * h).max(6.0)),
+        );
+        painter.rect_filled(thumb, 3.0, theme.muted.gamma_multiply(0.6));
+    }
+    let Some(map) = file.rows.clone() else { return };
+    let tick = |a: u32, b: u32| {
+        let top = strip.top() + a as f32 / total * h;
+        let height = ((b - a + 1) as f32 / total * h).max(3.0);
+        Rect::from_min_size(Pos2::new(strip.left() + 3.0, top), Vec2::new(CHANGE_MAP_WIDTH - 6.0, height))
+    };
+    for &(a, b, kind, change) in &map.runs {
+        let mut r = tick(a, b);
+        if file.change == Some(change) {
+            r = r.expand2(Vec2::new(2.0, 0.0));
+            painter.rect_stroke(r, 1.0, Stroke::new(1.0, theme.fg_bright), StrokeKind::Outside);
+        }
+        painter.rect_filled(r, 1.0, colors.of_run(kind));
+    }
+    let resp = ui.interact(strip, egui::Id::unique(("change-map", file.rel.as_str())), Sense::click());
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    if resp.clicked()
+        && let Some(pos) = resp.interact_pointer_pos()
+    {
+        let hit = map.changes.iter().position(|&(a, b)| {
+            let r = tick(a, b).expand2(Vec2::new(0.0, 3.0));
+            pos.y >= r.top() && pos.y <= r.bottom()
+        });
+        match hit {
+            Some(c) => {
+                file.change = Some(c);
+                file.scroll_to_row = Some((map.changes[c].0, 1.0 / 3.0));
+            }
+            None => {
+                let row = ((pos.y - strip.top()) / h * total).max(0.0) as u32;
+                file.scroll_to_row = Some((row, 0.5));
+            }
+        }
+    }
 }
 
 /// Scrolls with keys when no text field has focus: the arrows, j and k,

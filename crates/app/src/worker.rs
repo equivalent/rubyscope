@@ -11,6 +11,7 @@ use eframe::egui;
 use notify::{RecursiveMode, Watcher};
 use rubyscope_index::{BuildOptions, Index};
 
+use crate::diff::{self, Branch, FileDiff, RepoStatus};
 use crate::git::{self, Blame};
 use crate::highlight::{self, LineTokens};
 
@@ -34,6 +35,18 @@ pub enum Msg {
     OpenUrl(String),
     /// The folder picked in the folder dialog; none when it was closed.
     PickedFolder(Option<PathBuf>),
+    /// Diff mode: the branch, its base and the changed files.
+    RepoStatus(Arc<RepoStatus>),
+    /// Diff mode: the diffs of an open file, made from `text`.
+    FileDiff {
+        path: PathBuf,
+        text: Arc<str>,
+        diff: Arc<FileDiff>,
+    },
+    /// The branches for the base branch picker.
+    Branches(Vec<Branch>),
+    /// `HEAD` and the base branch as commits (see `diff::fingerprint`).
+    Fingerprint(String),
 }
 
 /// What a build starts from.
@@ -158,6 +171,48 @@ impl Worker {
         self.spawn(move |tx| {
             let blame = git::blame(&root, &rel).map(Arc::new);
             let _ = tx.send(Msg::Blamed { path, blame });
+        });
+    }
+
+    /// Diff mode: the status of the repository against a base branch.
+    pub fn repo_status(&self, root: PathBuf, base: Option<String>) {
+        self.spawn(move |tx| {
+            let status = diff::repo_status(&root, base.as_deref());
+            let _ = tx.send(Msg::RepoStatus(Arc::new(status)));
+        });
+    }
+
+    /// Diff mode: the branch diff and the uncommitted diff of one file. The
+    /// removed lines get syntax colors too.
+    pub fn file_diff(
+        &self,
+        root: PathBuf,
+        path: PathBuf,
+        rel: String,
+        text: Arc<str>,
+        merge_base: Option<String>,
+        head: Option<String>,
+    ) {
+        self.spawn(move |tx| {
+            let mut d = diff::file_diff(&root, &rel, &text, merge_base.as_deref(), head.as_deref());
+            for h in d.branch.iter_mut().chain(d.uncommitted.iter_mut()) {
+                if !h.removed.is_empty() {
+                    h.tokens = highlight::highlight(&path, &h.removed.join("\n")).unwrap_or_default();
+                }
+            }
+            let _ = tx.send(Msg::FileDiff { path, text, diff: Arc::new(d) });
+        });
+    }
+
+    pub fn branches(&self, root: PathBuf) {
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::Branches(diff::branches(&root)));
+        });
+    }
+
+    pub fn fingerprint(&self, root: PathBuf, base: String) {
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::Fingerprint(diff::fingerprint(&root, &base)));
         });
     }
 
