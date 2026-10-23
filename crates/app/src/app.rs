@@ -11,6 +11,7 @@ use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Tar
 
 use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
+use crate::git::Pull;
 use crate::keys::{self, Action, Keymap};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
 use crate::theme::Theme;
@@ -107,7 +108,11 @@ pub struct App {
     picking_folder: bool,
     /// Where the folder from the dialog opens: a new window, or this one.
     picked_to_new_window: bool,
-    toast: Option<(String, f64)>,
+    /// The message at the bottom: the text, when it showed, and for how
+    /// many seconds.
+    toast: Option<(String, f64, f64)>,
+    /// A `git pull` from the pull button runs.
+    pub pulling: bool,
     title: String,
     started: Instant,
     /// Diff mode: the branch and the working tree against a base branch.
@@ -146,6 +151,36 @@ fn go_to_change(t: &mut OpenFile, c: usize) {
     t.change = Some(c);
     t.scroll_to_row = Some((first, 1.0 / 3.0));
     t.cursor = Some(t.line_start(t.line_of_row(first)));
+}
+
+/// A small square button with a circular arrow. No font of the app has a
+/// refresh sign, so the arrow is drawn. Its name for screen readers and
+/// tests is "Pull".
+fn pull_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
+    let side = ui.spacing().interact_size.y;
+    let r = ui.add(egui::Button::new("").min_size(egui::vec2(side, side)));
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Pull"));
+    let color = if r.hovered() { theme.fg_bright } else { theme.fg };
+    let stroke = egui::Stroke::new(1.5, color);
+    let c = r.rect.center();
+    let radius = side * 0.27;
+    // From the top, most of the way around, clockwise.
+    let (start, sweep) = (-std::f32::consts::FRAC_PI_2 + 0.35, std::f32::consts::TAU * 0.74);
+    let at = |a: f32| c + radius * egui::vec2(a.cos(), a.sin());
+    let points: Vec<Pos2> = (0..=24).map(|i| at(start + sweep * i as f32 / 24.0)).collect();
+    let end = start + sweep;
+    let tip = at(end);
+    // The arrow head points along the circle.
+    let along = egui::vec2(-end.sin(), end.cos());
+    let out = egui::vec2(end.cos(), end.sin());
+    let head = radius * 1.1;
+    ui.painter().add(egui::Shape::line(points, stroke));
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![tip + along * head, tip + out * head * 0.65, tip - out * head * 0.65],
+        color,
+        egui::Stroke::NONE,
+    ));
+    r
 }
 
 /// After `]` opened a file: its first change (or its last one for `[`),
@@ -309,6 +344,7 @@ impl App {
             picking_folder: false,
             picked_to_new_window: false,
             toast: None,
+            pulling: false,
             title: String::new(),
             started: Instant::now(),
             show_diff: false,
@@ -429,11 +465,25 @@ impl App {
     /// The message at the bottom, if one shows (tests).
     #[cfg(test)]
     pub fn toast_text(&self) -> Option<String> {
-        self.toast.as_ref().map(|(t, _)| t.clone())
+        self.toast.as_ref().map(|(t, _, _)| t.clone())
     }
 
     fn toast(&mut self, text: impl Into<String>) {
-        self.toast = Some((text.into(), self.started.elapsed().as_secs_f64()));
+        self.toast_for(text, 3.5);
+    }
+
+    fn toast_for(&mut self, text: impl Into<String>, secs: f64) {
+        self.toast = Some((text.into(), self.started.elapsed().as_secs_f64(), secs));
+    }
+
+    /// The pull button: `git pull` in the background.
+    fn pull(&mut self) {
+        let Some(root) = self.root.clone() else { return };
+        if self.pulling {
+            return;
+        }
+        self.pulling = true;
+        self.worker.pull(root);
     }
 
     pub fn current(&self) -> Option<&OpenFile> {
@@ -1268,6 +1318,20 @@ impl App {
                         p.set_items(items);
                     }
                 }
+                Msg::Pulled(result) => {
+                    self.pulling = false;
+                    // Conflicts and errors stay longer: they need reading.
+                    let secs = match result {
+                        Pull::UpToDate | Pull::Pulled(_) => 3.5,
+                        _ => 12.0,
+                    };
+                    self.toast_for(result.message(), secs);
+                    // The file watcher reloads changed files; the diff
+                    // follows the new HEAD.
+                    if self.show_diff {
+                        self.refresh_repo();
+                    }
+                }
                 Msg::Fingerprint(fp) => {
                     if fp != self.diff_fingerprint {
                         let first = self.diff_fingerprint.is_empty();
@@ -1425,6 +1489,14 @@ impl App {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }
                     if self.root.is_some() {
+                        if self.pulling {
+                            ui.spinner().on_hover_text("Pulling…");
+                        } else if pull_button(ui, &theme)
+                            .on_hover_text("Pull the latest commits of this branch (git pull)")
+                            .clicked()
+                        {
+                            self.pull();
+                        }
                         let key = self.keys.shortcut(Action::ToggleDiff).map(|s| s.label()).unwrap_or_default();
                         let hint = if self.show_diff { "Hide the diff" } else { "Show the diff" };
                         let button = if self.show_diff {
@@ -2231,9 +2303,9 @@ impl App {
             }
         }
         // A short message at the bottom.
-        if let Some((text, at)) = &self.toast {
+        if let Some((text, at, secs)) = &self.toast {
             let age = self.started.elapsed().as_secs_f64() - at;
-            if age > 3.5 {
+            if age > *secs {
                 self.toast = None;
             } else {
                 let screen = ctx.content_rect();

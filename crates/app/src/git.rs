@@ -177,6 +177,98 @@ pub fn commit_or_pr_url(root: &Path, sha: &str) -> Option<String> {
     Some(pr.unwrap_or_else(|| format!("{base}/commit/{sha}")))
 }
 
+/// What `git pull` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pull {
+    UpToDate,
+    /// HEAD moved by this many commits.
+    Pulled(u32),
+    /// The pull stopped on conflicts in these files. `rebase` is true when
+    /// a rebase stopped, false for a merge. Nothing is fixed or aborted.
+    Conflicts {
+        files: Vec<String>,
+        rebase: bool,
+    },
+    /// Git refused or failed: its message.
+    Failed(String),
+}
+
+impl Pull {
+    /// The message for the toast.
+    pub fn message(&self) -> String {
+        match self {
+            Pull::UpToDate => "Already up to date".into(),
+            Pull::Pulled(1) => "Pulled 1 commit".into(),
+            Pull::Pulled(n) => format!("Pulled {n} commits"),
+            Pull::Conflicts { files, rebase } => {
+                let what = if *rebase { "rebase" } else { "merge" };
+                let n = files.len();
+                let mut list = files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+                if n > 3 {
+                    list.push_str(&format!(" and {} more", n - 3));
+                }
+                format!(
+                    "The pull stopped on {what} conflicts in {n} file{}: {list}. Fix them in git, or run git {what} --abort.",
+                    if n == 1 { "" } else { "s" }
+                )
+            }
+            Pull::Failed(e) => format!("Pull failed: {e}"),
+        }
+    }
+}
+
+fn git_out(root: &Path, args: &[&str]) -> Option<String> {
+    let out = Command::new("git").current_dir(root).args(args).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Runs `git pull` for the checked-out branch. It never asks for input,
+/// and it does not try to fix conflicts: it says which files have them.
+/// With no `pull.rebase` or `pull.ff` setting, it merges, as git did
+/// before it started to ask.
+pub fn pull(root: &Path) -> Pull {
+    let before = git_out(root, &["rev-parse", "HEAD"]);
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_MERGE_AUTOEDIT", "no")
+        .stdin(std::process::Stdio::null())
+        .args(["pull", "--no-edit"]);
+    let configured = ["pull.rebase", "pull.ff"].iter().any(|k| git_out(root, &["config", "--get", k]).is_some());
+    if !configured {
+        cmd.arg("--no-rebase");
+    }
+    let out = match cmd.output() {
+        Ok(o) => o,
+        Err(e) => return Pull::Failed(format!("could not run git: {e}")),
+    };
+    let conflicts = git_out(root, &["diff", "--name-only", "--diff-filter=U"])
+        .map(|s| s.lines().map(String::from).collect::<Vec<_>>())
+        .unwrap_or_default();
+    if !conflicts.is_empty() {
+        let in_merge = git_out(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_some();
+        return Pull::Conflicts { files: conflicts, rebase: !in_merge };
+    }
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let lines: Vec<&str> = err
+            .lines()
+            .map(|l| l.trim().trim_start_matches("fatal: ").trim_start_matches("error: "))
+            .filter(|l| !l.is_empty() && !l.starts_with("hint:"))
+            .collect();
+        let msg = if lines.is_empty() { "git pull did not work".to_string() } else { lines.join(" ") };
+        return Pull::Failed(msg);
+    }
+    let after = git_out(root, &["rev-parse", "HEAD"]);
+    match (before, after) {
+        (Some(b), Some(a)) if a != b => {
+            let n = git_out(root, &["rev-list", "--count", &format!("{b}..{a}")]).and_then(|n| n.parse().ok());
+            Pull::Pulled(n.unwrap_or(1))
+        }
+        _ => Pull::UpToDate,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +338,97 @@ filename a.rb
         assert_eq!(relative_time(0, 30), "just now");
         assert_eq!(relative_time(0, 86_400 * 3), "3 days ago");
         assert_eq!(relative_time(0, 86_400 * 400), "1 year ago");
+    }
+
+    /// A remote, a clone of it with `order.rb`, and a second clone to push
+    /// new commits from.
+    fn pull_fixture(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("rubyscope-pull-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let run = |cwd: &Path, args: &[&str]| {
+            let out = Command::new("git").current_dir(cwd).args(args).output().unwrap();
+            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        };
+        run(&dir, &["init", "-q", "--bare", "-b", "main", "remote.git"]);
+        for clone in ["mine", "theirs"] {
+            run(&dir, &["clone", "-q", "remote.git", clone]);
+            let c = dir.join(clone);
+            for (k, v) in
+                [("user.name", "Test Author"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")]
+            {
+                run(&c, &["config", k, v]);
+            }
+            if clone == "mine" {
+                std::fs::write(c.join("order.rb"), "class Order\nend\n").unwrap();
+                run(&c, &["add", "."]);
+                run(&c, &["commit", "-q", "-m", "Order"]);
+                run(&c, &["push", "-q", "-u", "origin", "main"]);
+            }
+        }
+        let theirs = dir.join("theirs");
+        run(&theirs, &["pull", "-q", "origin", "main"]);
+        run(&theirs, &["branch", "-q", "--set-upstream-to", "origin/main"]);
+        (dir.join("mine"), theirs)
+    }
+
+    fn commit_and_push(repo: &Path, text: &str) {
+        std::fs::write(repo.join("order.rb"), text).unwrap();
+        for args in [&["commit", "-q", "-am", "Change"][..], &["push", "-q"][..]] {
+            let out = Command::new("git").current_dir(repo).args(args).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        }
+    }
+
+    #[test]
+    fn pull_brings_new_commits() {
+        let (mine, theirs) = pull_fixture("new");
+        assert_eq!(pull(&mine), Pull::UpToDate);
+        commit_and_push(&theirs, "class Order\n  has_many :refunds\nend\n");
+        assert_eq!(pull(&mine), Pull::Pulled(1));
+        assert!(std::fs::read_to_string(mine.join("order.rb")).unwrap().contains("refunds"));
+        assert_eq!(pull(&mine).message(), "Already up to date");
+    }
+
+    /// Both clones change the same line; `mine` pulls with `pull.rebase`
+    /// set to `rebase`.
+    fn pull_into_a_conflict(name: &str, rebase: &str) -> (std::path::PathBuf, Pull) {
+        let (mine, theirs) = pull_fixture(name);
+        commit_and_push(&theirs, "class Order\n  has_many :refunds\nend\n");
+        std::fs::write(mine.join("order.rb"), "class Order\n  has_many :items\nend\n").unwrap();
+        for args in [&["config", "pull.rebase", rebase][..], &["commit", "-q", "-am", "Items"][..]] {
+            let out = Command::new("git").current_dir(&mine).args(args).output().unwrap();
+            assert!(out.status.success());
+        }
+        let result = pull(&mine);
+        (mine, result)
+    }
+
+    #[test]
+    fn pull_reports_merge_conflicts_and_leaves_them() {
+        let (mine, result) = pull_into_a_conflict("merge", "false");
+        assert_eq!(result, Pull::Conflicts { files: vec!["order.rb".into()], rebase: false });
+        assert!(result.message().contains("merge conflicts in 1 file: order.rb"), "{}", result.message());
+        assert!(result.message().contains("git merge --abort"), "{}", result.message());
+        // The conflict is still there for the user to fix.
+        assert!(std::fs::read_to_string(mine.join("order.rb")).unwrap().contains("<<<<<<<"));
+    }
+
+    #[test]
+    fn pull_reports_rebase_conflicts() {
+        let (_, result) = pull_into_a_conflict("rebase", "true");
+        assert_eq!(result, Pull::Conflicts { files: vec!["order.rb".into()], rebase: true });
+        assert!(result.message().contains("git rebase --abort"), "{}", result.message());
+    }
+
+    #[test]
+    fn pull_without_an_upstream_says_why() {
+        let (mine, _) = pull_fixture("upstream");
+        let out = Command::new("git").current_dir(&mine).args(["checkout", "-q", "-b", "feature/x"]).output().unwrap();
+        assert!(out.status.success());
+        match pull(&mine) {
+            Pull::Failed(msg) => assert!(msg.contains("no tracking information"), "{msg}"),
+            other => panic!("{other:?}"),
+        }
     }
 }

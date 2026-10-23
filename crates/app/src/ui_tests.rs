@@ -1228,6 +1228,59 @@ fn diff_mode_does_not_move_the_window_content() {
     assert_eq!(h.get_by_label("Files").rect(), before);
 }
 
+/// A shop cloned from a remote, and a second clone that pushes a new
+/// commit to it. Returns the first clone, which the window opens.
+fn pull_fixture() -> PathBuf {
+    let dir = fixture_named("pull");
+    let git = |cwd: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .current_dir(cwd)
+            .args(["-c", "user.name=Test Author", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    };
+    git(&dir, &["init", "-q", "--bare", "-b", "main", "remote.git"]);
+    git(&dir, &["clone", "-q", "remote.git", "shop"]);
+    let shop = dir.join("shop");
+    std::fs::create_dir_all(shop.join("app/models")).unwrap();
+    std::fs::write(shop.join("Gemfile"), "source \"https://rubygems.org\"\n").unwrap();
+    std::fs::write(shop.join("app/models/order.rb"), "class Order\nend\n").unwrap();
+    git(&shop, &["add", "."]);
+    git(&shop, &["commit", "-q", "-m", "Orders"]);
+    git(&shop, &["push", "-q", "-u", "origin", "main"]);
+    git(&dir, &["clone", "-q", "remote.git", "other"]);
+    let other = dir.join("other");
+    std::fs::write(other.join("app/models/order.rb"), "class Order\n  has_many :refunds\nend\n").unwrap();
+    git(&other, &["commit", "-q", "-am", "Refunds"]);
+    git(&other, &["push", "-q"]);
+    shop
+}
+
+#[test]
+fn the_pull_button_pulls_the_branch() {
+    let root = pull_fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    h.get_by_label("Pull").click();
+    for _ in 0..200 {
+        std::thread::sleep(Duration::from_millis(25));
+        let _ = h.run_ok();
+        if !h.state().pulling {
+            break;
+        }
+    }
+    let _ = h.run_ok();
+    assert_eq!(toast_text(&h), "Pulled 1 commit");
+    assert!(std::fs::read_to_string(root.join("app/models/order.rb")).unwrap().contains("refunds"));
+    h.event(Event::PointerMoved(Pos2::new(600.0, 400.0)));
+    let _ = h.run_ok();
+    shot(&mut h, "50-pull");
+    // The button is back for the next pull.
+    h.get_by_label("Pull");
+}
+
 #[test]
 fn diff_mode_outside_git_says_so() {
     let root = fixture_named("nogit");

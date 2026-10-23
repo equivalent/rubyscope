@@ -137,7 +137,7 @@ rubyscope                                            # see below
 
 | Part | What it has |
 |---|---|
-| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
+| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button, the pull button, the "Diff" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
 | Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files. |
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
 | Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
@@ -336,6 +336,15 @@ commit, a checkout, a fetch; rubyscope looks every 4 seconds). Outside a
 git repository, the diff bar says so and nothing is marked. When the base
 branch does not exist any more, the diff bar says so and only the changes
 that are not committed are shown.
+
+The round arrow next to "Diff" runs `git pull` for the branch that is
+checked out. It follows your `pull.rebase` setting, and merges when there
+is none. A message at the bottom says how many commits came in. When the
+pull stops on conflicts, rubyscope does not fix or abort anything: the
+message names the files, and you fix them in git or run
+`git merge --abort` (or `git rebase --abort`). When git refuses (no
+upstream branch, changes that the pull would overwrite), the message
+shows why.
 
 ## What a click understands
 

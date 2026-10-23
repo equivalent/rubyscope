@@ -47,6 +47,8 @@ pub enum Msg {
     Branches(Vec<Branch>),
     /// `HEAD` and the base branch as commits (see `diff::fingerprint`).
     Fingerprint(String),
+    /// What the pull button did.
+    Pulled(git::Pull),
 }
 
 /// What a build starts from.
@@ -213,6 +215,13 @@ impl Worker {
     pub fn fingerprint(&self, root: PathBuf, base: String) {
         self.spawn(move |tx| {
             let _ = tx.send(Msg::Fingerprint(diff::fingerprint(&root, &base)));
+        });
+    }
+
+    /// `git pull` for the pull button.
+    pub fn pull(&self, root: PathBuf) {
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::Pulled(git::pull(&root)));
         });
     }
 
