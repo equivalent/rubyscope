@@ -1556,3 +1556,67 @@ fn a_missing_base_branch_still_shows_what_is_not_committed() {
     let rows = row_text(&h);
     assert!(rows.contains(&"~16".to_string()) && !rows.contains(&"+4".to_string()), "{rows:#?}");
 }
+
+/// What the window manager sends for Super+W or the close button.
+fn ask_to_close(h: &mut Harness<'static, App>) {
+    let root = h.input_mut().viewports.entry(eframe::egui::ViewportId::ROOT).or_default();
+    root.events.push(eframe::egui::ViewportEvent::Close);
+    h.step();
+}
+
+fn held_back_close(h: &Harness<'static, App>) -> bool {
+    h.output().viewport_output.values().any(|v| v.commands.contains(&eframe::egui::ViewportCommand::CancelClose))
+}
+
+#[test]
+fn closing_with_nothing_running_quits_at_once() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    ask_to_close(&mut h);
+    assert!(h.state().quit);
+    assert!(asked_to_close(&h));
+    assert!(h.query_by_label("Closing rubyscope").is_none());
+}
+
+#[test]
+fn closing_waits_for_the_index_save_and_shows_it() {
+    use std::sync::atomic::Ordering;
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    let saving = h.state().worker.saving.clone();
+    saving.store(true, Ordering::SeqCst);
+    ask_to_close(&mut h);
+    assert!(held_back_close(&h));
+    assert!(!h.state().quit);
+    // The dialog shows once closing takes a moment.
+    std::thread::sleep(Duration::from_millis(200));
+    // A new window area shows from its second frame.
+    h.step();
+    h.step();
+    h.get_by_label("Closing rubyscope");
+    h.get_by_label("Saving the index…");
+    shot(&mut h, "closing");
+    let c = h.state().closing.as_ref().unwrap();
+    assert_eq!(c.done, 2, "the tabs are saved and the watcher stopped");
+    // Keys do nothing while closing.
+    press(&mut h, CMD, Key::P);
+    assert!(h.state().picker.is_none());
+
+    saving.store(false, Ordering::SeqCst);
+    h.step();
+    assert!(h.state().quit);
+    assert!(asked_to_close(&h));
+}
+
+#[test]
+fn closing_again_quits_without_waiting() {
+    let root = fixture();
+    let mut h = harness(&root);
+    h.state_mut().pulling = true;
+    ask_to_close(&mut h);
+    assert!(!h.state().quit);
+    ask_to_close(&mut h);
+    assert!(h.state().quit);
+}

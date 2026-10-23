@@ -74,11 +74,13 @@ pub struct Worker {
     pub rx: Receiver<Msg>,
     ctx: egui::Context,
     pub building: Arc<AtomicBool>,
+    /// True while the index is written to the cache. Closing waits for it.
+    pub saving: Arc<AtomicBool>,
     /// Set when a build is asked for while one runs: it runs once more.
     again: Arc<AtomicBool>,
     /// Where the index is saved between starts. None in tests.
     cache_dir: Option<PathBuf>,
-    _watcher: Option<notify::RecommendedWatcher>,
+    watcher: Option<notify::RecommendedWatcher>,
 }
 
 /// Folders worth watching in a Rails project. `node_modules`, `tmp` and
@@ -94,9 +96,10 @@ impl Worker {
             rx,
             ctx,
             building: Arc::new(AtomicBool::new(false)),
+            saving: Arc::new(AtomicBool::new(false)),
             again: Arc::new(AtomicBool::new(false)),
             cache_dir,
-            _watcher: None,
+            watcher: None,
         }
     }
 
@@ -124,7 +127,8 @@ impl Worker {
             return;
         }
         let root = root.to_path_buf();
-        let (building, again, cache_dir) = (self.building.clone(), self.again.clone(), self.cache_dir.clone());
+        let (building, again, saving, cache_dir) =
+            (self.building.clone(), self.again.clone(), self.saving.clone(), self.cache_dir.clone());
         let ctx = self.ctx.clone();
         self.spawn(move |tx| {
             let opts = BuildOptions::default();
@@ -152,9 +156,13 @@ impl Worker {
                         ctx.request_repaint();
                         if let Some(dir) = &cache_dir
                             && !index.stats.same_as_saved
-                            && let Err(e) = index.save(dir)
                         {
-                            eprintln!("rubyscope: could not save the index: {e}");
+                            saving.store(true, Ordering::SeqCst);
+                            if let Err(e) = index.save(dir) {
+                                eprintln!("rubyscope: could not save the index: {e}");
+                            }
+                            saving.store(false, Ordering::SeqCst);
+                            ctx.request_repaint();
                         }
                         from = From::Last(index);
                     }
@@ -307,7 +315,11 @@ impl Worker {
                 let _ = watcher.watch(&p, RecursiveMode::NonRecursive);
             }
         }
-        self._watcher = Some(watcher);
+        self.watcher = Some(watcher);
+    }
+
+    pub fn stop_watching(&mut self) {
+        self.watcher = None;
     }
 }
 

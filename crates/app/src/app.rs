@@ -9,6 +9,7 @@ use eframe::egui::{self, Color32, Pos2, RichText};
 use rubyscope_index::model::Span;
 use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Target};
 
+use crate::closing::{Closing, Step};
 use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
 use crate::git::Pull;
@@ -140,6 +141,10 @@ pub struct App {
     pub switching: bool,
     /// Say what diff mode compares when the status comes.
     announce_diff: bool,
+    /// The window is closing: the work that runs before the app quits.
+    pub closing: Option<Closing>,
+    /// The app has quit (tests: the process does not end there).
+    pub quit: bool,
 }
 
 /// Lets the code view ask the index what is clickable in a file.
@@ -370,6 +375,8 @@ impl App {
             switch_branches: Vec::new(),
             switching: false,
             announce_diff: false,
+            closing: None,
+            quit: false,
         };
         if let Some(root) = root {
             app.open_project(root);
@@ -479,6 +486,77 @@ impl App {
         let tabs: Vec<(String, u32)> = self.tabs.iter().map(|t| (t.rel.clone(), t.top_line)).collect();
         if let Some(p) = session_path(root) {
             let _ = std::fs::write(p, serde_json::to_string(&tabs).unwrap_or_default());
+        }
+    }
+
+    /// The window was asked to close (Super+W, the close button, Cmd+Q).
+    /// The close is held back until the steps are done. A second close
+    /// quits at once.
+    fn close_requested(&mut self, ctx: &egui::Context) {
+        if self.quit {
+            return;
+        }
+        if self.closing.is_some() {
+            self.quit(ctx);
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        let mut steps = vec![Step::SaveTabs, Step::StopWatcher];
+        if self.worker.saving.load(std::sync::atomic::Ordering::SeqCst) {
+            steps.push(Step::SaveIndex);
+        }
+        if self.pulling {
+            steps.push(Step::Pull);
+        }
+        if self.switching {
+            steps.push(Step::SwitchBranch);
+        }
+        self.closing = Some(Closing::new(steps));
+    }
+
+    /// Runs the closing steps that can run now, and quits when all are
+    /// done (or after `GIVE_UP_AFTER`).
+    fn run_closing(&mut self, ctx: &egui::Context) {
+        let Some(closing) = &self.closing else { return };
+        let given_up = closing.given_up();
+        while let Some(step) = self.closing.as_ref().and_then(|c| c.current()) {
+            let done = match step {
+                Step::SaveTabs => {
+                    self.save_session();
+                    true
+                }
+                Step::StopWatcher => {
+                    self.worker.stop_watching();
+                    true
+                }
+                Step::SaveIndex => !self.worker.saving.load(std::sync::atomic::Ordering::SeqCst),
+                Step::Pull => !self.pulling,
+                Step::SwitchBranch => !self.switching,
+            };
+            if !done && !given_up {
+                // The worker asks for a repaint when it is done; this is
+                // for the dialog and the time limit.
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if let Some(c) = &mut self.closing {
+                c.done += 1;
+            }
+        }
+        self.quit(ctx);
+    }
+
+    /// Ends the app. The memory is not freed first: the system frees it
+    /// all at once, and freeing the index alone takes a while.
+    fn quit(&mut self, ctx: &egui::Context) {
+        if let Some(c) = &self.closing {
+            eprintln!("rubyscope: closed in {:.2} s", c.started.elapsed().as_secs_f64());
+        }
+        self.quit = true;
+        if cfg!(test) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        } else {
+            std::process::exit(0);
         }
     }
 
@@ -2493,8 +2571,11 @@ impl App {
         self.update_title(&ctx);
 
         // Keys. The picker and the find bar get Enter, arrows and typing.
-        for action in self.keys.pressed(&ctx) {
-            self.run_action(action, &ctx);
+        // While closing, keys do nothing.
+        if self.closing.is_none() {
+            for action in self.keys.pressed(&ctx) {
+                self.run_action(action, &ctx);
+            }
         }
         let (back, fwd) = ctx.input(|i| {
             (
@@ -2618,6 +2699,14 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.close_requested(&ctx);
+        }
         self.frame_ui(ui);
+        self.run_closing(&ctx);
+        if let Some(closing) = &self.closing {
+            closing.ui(&ctx, &self.theme);
+        }
     }
 }
