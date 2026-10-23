@@ -128,6 +128,16 @@ pub struct App {
     /// `HEAD` and the base as commits, to see when they move.
     diff_fingerprint: String,
     diff_poll: Option<Instant>,
+    /// The checked-out branch, for the branch button. Read every few
+    /// seconds.
+    pub head_name: Option<String>,
+    head_poll: Option<Instant>,
+    /// The authors of open pull requests, by branch (from `gh`).
+    pr_authors: HashMap<String, crate::git::PrAuthor>,
+    /// The last branch list of the switcher.
+    switch_branches: Vec<Branch>,
+    /// A branch switch runs.
+    pub switching: bool,
     /// Say what diff mode compares when the status comes.
     announce_diff: bool,
 }
@@ -354,6 +364,11 @@ impl App {
             diff_edge: 0,
             diff_fingerprint: String::new(),
             diff_poll: None,
+            head_name: None,
+            head_poll: None,
+            pr_authors: HashMap::new(),
+            switch_branches: Vec::new(),
+            switching: false,
             announce_diff: false,
         };
         if let Some(root) = root {
@@ -422,6 +437,11 @@ impl App {
         self.diff_marks = Arc::new(HashMap::new());
         self.diff_edge = 0;
         self.diff_fingerprint.clear();
+        self.head_name = None;
+        self.head_poll = None;
+        self.pr_authors.clear();
+        self.switch_branches.clear();
+        self.switching = false;
         if self.sidebar_tab == SidebarTab::Changes {
             self.sidebar_tab = SidebarTab::Files;
         }
@@ -734,6 +754,68 @@ impl App {
                 item
             })
             .collect()
+    }
+
+    /// The branch switcher. The branches load in the background, then the
+    /// authors of their pull requests.
+    fn open_switch_picker(&mut self) {
+        let Some(root) = self.root.clone() else { return };
+        let items = Arc::new(self.switch_items());
+        self.picker = Some(Picker::new(PickerKind::SwitchBranch, items));
+        self.worker.switch_branches(root);
+    }
+
+    fn switch_items(&self) -> Vec<PickItem> {
+        let theme = &self.theme;
+        let now = now_secs();
+        let colors = [theme.blue, theme.green, theme.magenta, theme.cyan, theme.orange, theme.yellow, theme.red];
+        self.switch_branches
+            .iter()
+            .map(|b| {
+                let local = if b.remote { crate::git::local_name(&b.name) } else { b.name.as_str() };
+                let pr = self.pr_authors.get(local);
+                let mut detail = if b.is_head && !b.remote {
+                    "checked out".to_string()
+                } else if b.time > 0 {
+                    crate::git::relative_time(b.time, now)
+                } else {
+                    String::new()
+                };
+                match pr {
+                    Some(p) => detail.push_str(&format!(" · #{} {}", p.number, p.name)),
+                    None if !b.author.is_empty() => detail.push_str(&format!(" · last commit by {}", b.author)),
+                    None => {}
+                }
+                let mut item = PickItem::new(&b.name, detail, Payload::Switch(b.name.clone(), b.remote), 0);
+                item.dim = b.is_head && !b.remote;
+                if b.remote {
+                    item.tags.push(("remote".into(), theme.fg_dim));
+                }
+                let (who, color) = match pr {
+                    Some(p) => {
+                        let hash = p.name.bytes().fold(0usize, |h, c| h.wrapping_mul(31).wrapping_add(c as usize));
+                        (p.name.as_str(), colors[hash % colors.len()])
+                    }
+                    None => (b.author.as_str(), theme.fg_dim),
+                };
+                let initials = crate::git::initials(who);
+                if !initials.is_empty() {
+                    item.tags.push((initials, color));
+                }
+                item
+            })
+            .collect()
+    }
+
+    /// Checks out a branch in the background.
+    fn switch_to(&mut self, name: String, remote: bool) {
+        let Some(root) = self.root.clone() else { return };
+        if !remote && self.head_name.as_deref() == Some(name.as_str()) {
+            self.toast(format!("{name} is checked out"));
+            return;
+        }
+        self.switching = true;
+        self.worker.switch_branch(root, name, remote);
     }
 
     /// Diffs against another branch, and remembers it for the project.
@@ -1152,6 +1234,7 @@ impl App {
             }
             Action::ToggleDiff => self.toggle_diff(),
             Action::DiffAgainstBranch => self.open_branch_picker(),
+            Action::SwitchBranch => self.open_switch_picker(),
             Action::NextChange => self.jump_change(1),
             Action::PrevChange => self.jump_change(-1),
             Action::GoToSymbol => match self.symbol_items() {
@@ -1332,6 +1415,35 @@ impl App {
                         self.refresh_repo();
                     }
                 }
+                Msg::HeadName(name) => self.head_name = name,
+                Msg::SwitchBranches(list) => {
+                    self.switch_branches = list;
+                    let items = Arc::new(self.switch_items());
+                    if let Some(p) = self.picker.as_mut().filter(|p| p.kind == PickerKind::SwitchBranch) {
+                        p.set_items(items);
+                    }
+                }
+                Msg::PrAuthors(prs) => {
+                    self.pr_authors = prs;
+                    let items = Arc::new(self.switch_items());
+                    if let Some(p) = self.picker.as_mut().filter(|p| p.kind == PickerKind::SwitchBranch) {
+                        p.set_items(items);
+                    }
+                }
+                Msg::Switched(result) => {
+                    self.switching = false;
+                    match result {
+                        Ok(name) => {
+                            self.toast(format!("Switched to {name}"));
+                            self.head_name = Some(name);
+                            // The files on disk changed: reload the open
+                            // tabs and index again, as after an edit.
+                            self.pending_changes.extend(self.tabs.iter().map(|t| t.path.clone()));
+                            self.last_change = Some(Instant::now());
+                        }
+                        Err(e) => self.toast_for(format!("Could not switch: {e}"), 12.0),
+                    }
+                }
                 Msg::Fingerprint(fp) => {
                     if fp != self.diff_fingerprint {
                         let first = self.diff_fingerprint.is_empty();
@@ -1489,6 +1601,7 @@ impl App {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }
                     if self.root.is_some() {
+                        // Right to left: pull, the branch, Diff.
                         if self.pulling {
                             ui.spinner().on_hover_text("Pulling…");
                         } else if pull_button(ui, &theme)
@@ -1496,6 +1609,18 @@ impl App {
                             .clicked()
                         {
                             self.pull();
+                        }
+                        if self.switching {
+                            ui.spinner().on_hover_text("Switching the branch…");
+                        } else if let Some(name) = self.head_name.clone() {
+                            let short: String = if name.chars().count() > 32 {
+                                name.chars().take(31).chain(std::iter::once('…')).collect()
+                            } else {
+                                name.clone()
+                            };
+                            if ui.button(short).on_hover_text(format!("{name}: click to switch the branch")).clicked() {
+                                self.open_switch_picker();
+                            }
                         }
                         let key = self.keys.shortcut(Action::ToggleDiff).map(|s| s.label()).unwrap_or_default();
                         let hint = if self.show_diff { "Hide the diff" } else { "Show the diff" };
@@ -2124,6 +2249,7 @@ impl App {
                 Some(Ok(Picked::Search(q))) => self.search_project(&q),
                 Some(Ok(Picked::Item(item))) => match item.payload {
                     Payload::Branch(name) => self.choose_base(name),
+                    Payload::Switch(name, remote) => self.switch_to(name, remote),
                     Payload::File(rel) => {
                         if let Some(root) = self.root.clone() {
                             self.open_path(&root.join(rel), None, None, true);
@@ -2328,7 +2454,16 @@ impl App {
     /// moved (a commit, a checkout, a fetch), and then makes the diffs again.
     fn poll_git(&mut self, ctx: &egui::Context) {
         const EVERY: Duration = Duration::from_secs(4);
-        let (true, Some(root)) = (self.show_diff, self.root.clone()) else { return };
+        let Some(root) = self.root.clone() else { return };
+        // The branch button: the branch can change outside rubyscope.
+        if self.head_poll.is_none_or(|t| t.elapsed() >= EVERY) {
+            self.head_poll = Some(Instant::now());
+            self.worker.head_name(root.clone());
+            ctx.request_repaint_after(EVERY);
+        }
+        if !self.show_diff {
+            return;
+        }
         if self.diff_poll.is_none_or(|t| t.elapsed() >= EVERY) {
             self.diff_poll = Some(Instant::now());
             let base = self.repo.as_ref().map(|r| r.base.clone()).unwrap_or_default();

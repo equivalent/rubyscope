@@ -627,9 +627,11 @@ pub struct Branch {
     pub time: i64,
     /// The checked-out branch.
     pub is_head: bool,
+    /// The author of its last commit.
+    pub author: String,
 }
 
-pub const BRANCH_FORMAT: &str = "%(refname)%09%(refname:short)%09%(committerdate:unix)%09%(HEAD)";
+pub const BRANCH_FORMAT: &str = "%(refname)%09%(refname:short)%09%(committerdate:unix)%09%(HEAD)%09%(authorname)";
 
 /// The local and remote branches, local first, each newest first.
 pub fn branches(root: &Path) -> Vec<Branch> {
@@ -644,7 +646,8 @@ pub fn parse_branches(text: &str) -> Vec<Branch> {
         .lines()
         .filter_map(|line| {
             let mut f = line.split('\t');
-            let (full, short, time, head) = (f.next()?, f.next()?, f.next()?, f.next().unwrap_or(""));
+            let (full, short, time) = (f.next()?, f.next()?, f.next()?);
+            let (head, author) = (f.next().unwrap_or(""), f.next().unwrap_or(""));
             if full.ends_with("/HEAD") {
                 return None;
             }
@@ -653,6 +656,7 @@ pub fn parse_branches(text: &str) -> Vec<Branch> {
                 remote: full.starts_with("refs/remotes/"),
                 time: time.parse().unwrap_or(0),
                 is_head: head.trim() == "*",
+                author: author.trim().to_string(),
             })
         })
         .collect();
@@ -867,8 +871,8 @@ index 1111111..2222222 100644
     #[test]
     fn branch_list() {
         let text = "\
-refs/heads/main\tmain\t1760000000\t
-refs/heads/feature/order-refunds\tfeature/order-refunds\t1761000000\t*
+refs/heads/main\tmain\t1760000000\t \tLeo Ortiz
+refs/heads/feature/order-refunds\tfeature/order-refunds\t1761000000\t*\tAna Novak
 refs/remotes/origin/HEAD\torigin\t1760000000\t
 refs/remotes/origin/main\torigin/main\t1760000000\t
 refs/remotes/origin/release/2.4\torigin/release/2.4\t1750000000\t
@@ -877,7 +881,9 @@ refs/remotes/origin/release/2.4\torigin/release/2.4\t1750000000\t
         let names: Vec<&str> = b.iter().map(|b| b.name.as_str()).collect();
         assert_eq!(names, vec!["feature/order-refunds", "main", "origin/main", "origin/release/2.4"]);
         assert!(b[0].is_head && !b[0].remote);
+        assert_eq!(b[0].author, "Ana Novak");
         assert!(b[2].remote);
+        assert_eq!(b[2].author, "");
     }
 
     #[test]

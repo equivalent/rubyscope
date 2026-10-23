@@ -55,6 +55,7 @@ pub enum Action {
     NextChange,
     PrevChange,
     GoToChangedFile,
+    SwitchBranch,
 }
 
 impl Action {
@@ -79,6 +80,7 @@ impl Action {
         Action::NextChange,
         Action::PrevChange,
         Action::GoToChangedFile,
+        Action::SwitchBranch,
         Action::ToggleSidebar,
         Action::ToggleBottomPanel,
         Action::OpenInEditor,
@@ -124,6 +126,7 @@ impl Action {
             Action::NextChange => "next_change",
             Action::PrevChange => "prev_change",
             Action::GoToChangedFile => "go_to_changed_file",
+            Action::SwitchBranch => "switch_branch",
         }
     }
 
@@ -160,6 +163,7 @@ impl Action {
             Action::NextChange => "Next change",
             Action::PrevChange => "Previous change",
             Action::GoToChangedFile => "Go to changed file",
+            Action::SwitchBranch => "Switch branch…",
         }
     }
 

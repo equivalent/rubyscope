@@ -1282,6 +1282,80 @@ fn the_pull_button_pulls_the_branch() {
 }
 
 #[test]
+fn the_branch_button_switches_branches() {
+    let root = pull_fixture();
+    let other = root.parent().unwrap().join("other");
+    let git = |cwd: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .current_dir(cwd)
+            .env("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
+            .args(["-c", "user.name=Ana Novak", "-c", "user.email=ana@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    };
+    git(&other, &["checkout", "-q", "-b", "feature/refunds"]);
+    std::fs::write(other.join("app/models/refund.rb"), "class Refund\nend\n").unwrap();
+    git(&other, &["add", "."]);
+    git(&other, &["commit", "-q", "-m", "Refund model"]);
+    git(&other, &["push", "-q", "-u", "origin", "feature/refunds"]);
+    git(&root, &["fetch", "-q"]);
+
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    settle(&mut h);
+    assert_eq!(h.state().head_name.as_deref(), Some("main"));
+    h.get_by_label("main").click();
+    settle(&mut h);
+    assert_eq!(h.state().picker.as_ref().map(|p| p.kind), Some(crate::picker::PickerKind::SwitchBranch));
+    // The newest commit first, with the initials of its author (no pull
+    // request here: the author of the last commit).
+    let first = h.state().picker.as_ref().unwrap().first_label().unwrap_or_default();
+    assert_eq!(first, "origin/feature/refunds");
+    h.get_by_label("AN");
+    h.event(Event::PointerMoved(Pos2::new(600.0, 700.0)));
+    shot(&mut h, "51-switch-branch");
+    type_text(&mut h, "refunds");
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    for _ in 0..200 {
+        std::thread::sleep(Duration::from_millis(25));
+        let _ = h.run_ok();
+        if !h.state().switching {
+            break;
+        }
+    }
+    let _ = h.run_ok();
+    assert_eq!(toast_text(&h), "Switched to feature/refunds");
+    assert_eq!(h.state().head_name.as_deref(), Some("feature/refunds"));
+    assert!(root.join("app/models/refund.rb").exists());
+    // The open file is read again from the new branch.
+    for _ in 0..60 {
+        std::thread::sleep(Duration::from_millis(25));
+        let _ = h.run_ok();
+    }
+    assert!(h.state().current().unwrap().text.contains("refunds"));
+
+    // A change that the switch would lose: git refuses and says why.
+    std::fs::write(root.join("app/models/order.rb"), "class Order\n  # mine\nend\n").unwrap();
+    h.get_by_label("feature/refunds").click();
+    settle(&mut h);
+    type_text(&mut h, "main");
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    for _ in 0..200 {
+        std::thread::sleep(Duration::from_millis(25));
+        let _ = h.run_ok();
+        if !h.state().switching {
+            break;
+        }
+    }
+    let _ = h.run_ok();
+    assert!(toast_text(&h).starts_with("Could not switch:"), "{}", toast_text(&h));
+    assert!(toast_text(&h).contains("app/models/order.rb"), "{}", toast_text(&h));
+    assert_eq!(h.state().head_name.as_deref(), Some("feature/refunds"));
+}
+
+#[test]
 fn diff_mode_outside_git_says_so() {
     let root = fixture_named("nogit");
     std::fs::create_dir_all(root.join("app/models")).unwrap();

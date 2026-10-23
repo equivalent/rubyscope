@@ -49,6 +49,14 @@ pub enum Msg {
     Fingerprint(String),
     /// What the pull button did.
     Pulled(git::Pull),
+    /// The checked-out branch (none outside git).
+    HeadName(Option<String>),
+    /// The branches for the branch switcher.
+    SwitchBranches(Vec<Branch>),
+    /// The authors of the open pull requests, by branch.
+    PrAuthors(std::collections::HashMap<String, git::PrAuthor>),
+    /// The branch switcher: the new branch, or why git refused.
+    Switched(Result<String, String>),
 }
 
 /// What a build starts from.
@@ -222,6 +230,30 @@ impl Worker {
     pub fn pull(&self, root: PathBuf) {
         self.spawn(move |tx| {
             let _ = tx.send(Msg::Pulled(git::pull(&root)));
+        });
+    }
+
+    pub fn head_name(&self, root: PathBuf) {
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::HeadName(git::current_branch(&root)));
+        });
+    }
+
+    /// The branches for the switcher, then (slower, over the network) the
+    /// authors of their pull requests.
+    pub fn switch_branches(&self, root: PathBuf) {
+        let r = root.clone();
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::SwitchBranches(git::switch_list(&diff::branches(&r))));
+        });
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::PrAuthors(git::pr_authors(&root)));
+        });
+    }
+
+    pub fn switch_branch(&self, root: PathBuf, name: String, remote: bool) {
+        self.spawn(move |tx| {
+            let _ = tx.send(Msg::Switched(git::switch_branch(&root, &name, remote)));
         });
     }
 

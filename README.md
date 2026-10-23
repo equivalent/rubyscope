@@ -137,7 +137,7 @@ rubyscope                                            # see below
 
 | Part | What it has |
 |---|---|
-| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button, the pull button, the "Diff" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
+| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button, the pull button, the branch button, the "Diff" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
 | Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files. |
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
 | Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
@@ -223,6 +223,7 @@ can give them one (see below).
 | Index the project again, parsing every file | `reindex` |
 | Diff against branch… | `diff_against_branch` |
 | Go to changed file | `go_to_changed_file` |
+| Switch branch… | `switch_branch` |
 
 "Open in editor" uses `omarchy-launch-editor` when it is on `PATH`.
 Otherwise it opens nvim in a terminal with `xdg-terminal-exec`, or runs
@@ -345,6 +346,26 @@ message names the files, and you fix them in git or run
 `git merge --abort` (or `git rebase --abort`). When git refuses (no
 upstream branch, changes that the pull would overwrite), the message
 shows why.
+
+## Switch branches
+
+The button with the branch name, next to the round arrow, opens a list of
+branches ("Switch branch…" in Ctrl+K opens it too). The branch with the
+newest commit is first. The list has the local branches, and the remote
+branches that have no local branch of the same name. A remote branch
+gets a local branch that tracks it.
+
+Next to each branch are the initials of the author of its open pull
+request, with the number and the name on the right. rubyscope gets them
+with `gh pr list`, so they show only when `gh` is logged in. A branch
+without a pull request shows the initials of the author of its last
+commit, dimmed.
+
+rubyscope runs `git switch`. Changes that are not committed stay. When
+the switch would lose them, git refuses and the message says why. After
+a switch, the open files are read again and the project is indexed
+again. The button also follows a switch made outside rubyscope, within a
+few seconds.
 
 ## What a click understands
 

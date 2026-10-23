@@ -21,6 +21,7 @@ pub enum PickerKind {
     Line,
     Search,
     Branches,
+    SwitchBranch,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,8 @@ pub enum Payload {
     Action(Action),
     /// A base branch for diff mode.
     Branch(String),
+    /// A branch to check out, and whether it is a remote branch.
+    Switch(String, bool),
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +127,13 @@ impl Picker {
         }
     }
 
+    /// The label of the first result (tests).
+    #[cfg(test)]
+    pub fn first_label(&self) -> Option<String> {
+        let i = *self.results.first()?;
+        self.current().get(i).map(|item| item.label.clone())
+    }
+
     pub fn title(&self) -> &str {
         match self.kind {
             PickerKind::Files if self.show_changed && self.changed.is_some() => &self.changed_title,
@@ -133,6 +143,7 @@ impl Picker {
             PickerKind::Line => "Go to line",
             PickerKind::Search => "Search in all files",
             PickerKind::Branches => "Diff against branch",
+            PickerKind::SwitchBranch => "Switch branch",
         }
     }
 
@@ -248,7 +259,7 @@ impl Picker {
                         PickerKind::Commands => "command…",
                         PickerKind::Line => "line number",
                         PickerKind::Search => "text to find, then Enter",
-                        PickerKind::Branches => "branch…",
+                        PickerKind::Branches | PickerKind::SwitchBranch => "branch…",
                     };
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
@@ -280,7 +291,7 @@ impl Picker {
                             ui.separator();
                             ui.label(RichText::new("No changed file matches.").color(theme.fg_dim));
                         }
-                        if self.kind == PickerKind::Branches && items.is_empty() {
+                        if matches!(self.kind, PickerKind::Branches | PickerKind::SwitchBranch) && items.is_empty() {
                             ui.separator();
                             ui.label(RichText::new("Reading the branches…").color(theme.fg_dim));
                         }
@@ -339,6 +350,12 @@ impl Picker {
                         PickerKind::Branches => Some(
                             "The diff starts at the merge-base of the branch and HEAD, like a pull request. \
                              The choice is remembered for this project."
+                                .to_string(),
+                        ),
+                        PickerKind::SwitchBranch => Some(
+                            "The newest commit first. The initials are the author of the open pull request; \
+                             dim initials are the author of the last commit, when there is no pull request. \
+                             Changes that are not committed stay; git refuses when they would be lost."
                                 .to_string(),
                         ),
                         _ => None,

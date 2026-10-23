@@ -269,6 +269,116 @@ pub fn pull(root: &Path) -> Pull {
     }
 }
 
+/// The checked-out branch: `feature/order-refunds`, or `detached at
+/// 1a2b3c4` when no branch is checked out. None outside git.
+pub fn current_branch(root: &Path) -> Option<String> {
+    if let Some(name) = git_out(root, &["symbolic-ref", "--short", "-q", "HEAD"]).filter(|n| !n.is_empty()) {
+        return Some(name);
+    }
+    git_out(root, &["rev-parse", "--short", "HEAD"]).map(|sha| format!("detached at {sha}"))
+}
+
+/// The author of an open pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrAuthor {
+    pub number: u32,
+    /// The full name, or the GitHub login when there is no name.
+    pub name: String,
+}
+
+/// The authors of the open pull requests, by branch name, from the `gh`
+/// CLI. Empty when `gh` is missing, not logged in, or offline.
+pub fn pr_authors(root: &Path) -> std::collections::HashMap<String, PrAuthor> {
+    let out = Command::new("gh")
+        .current_dir(root)
+        .env("GH_PROMPT_DISABLED", "1")
+        .stdin(std::process::Stdio::null())
+        .args(["pr", "list", "--state", "open", "--limit", "300", "--json", "number,headRefName,author"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => parse_pr_authors(&String::from_utf8_lossy(&o.stdout)),
+        _ => Default::default(),
+    }
+}
+
+pub fn parse_pr_authors(json: &str) -> std::collections::HashMap<String, PrAuthor> {
+    #[derive(serde::Deserialize)]
+    struct Author {
+        #[serde(default)]
+        login: String,
+        #[serde(default)]
+        name: String,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Pr {
+        number: u32,
+        head_ref_name: String,
+        author: Author,
+    }
+    let prs: Vec<Pr> = serde_json::from_str(json).unwrap_or_default();
+    prs.into_iter()
+        .map(|p| {
+            let name = if p.author.name.trim().is_empty() { p.author.login } else { p.author.name };
+            (p.head_ref_name, PrAuthor { number: p.number, name })
+        })
+        .collect()
+}
+
+/// `AN` for `Ana Novak`, `AN` for the login `anovak`, `AM` for
+/// `Ana Maria Novak`: the first letters of the first and last name, or the
+/// first two letters of a single word.
+pub fn initials(name: &str) -> String {
+    let words: Vec<&str> =
+        name.split(|c: char| c.is_whitespace() || c == '-' || c == '_' || c == '.').filter(|w| !w.is_empty()).collect();
+    let letters: String = match words.as_slice() {
+        [] => String::new(),
+        [one] => one.chars().filter(|c| c.is_alphanumeric()).take(2).collect(),
+        [first, .., last] => first.chars().take(1).chain(last.chars().take(1)).collect(),
+    };
+    letters.to_uppercase()
+}
+
+/// The branches to switch to: the local ones, and the remote ones that
+/// have no local branch of the same name. The newest commit first.
+pub fn switch_list(branches: &[crate::diff::Branch]) -> Vec<crate::diff::Branch> {
+    let local: std::collections::HashSet<&str> =
+        branches.iter().filter(|b| !b.remote).map(|b| b.name.as_str()).collect();
+    let mut out: Vec<crate::diff::Branch> =
+        branches.iter().filter(|b| !b.remote || !local.contains(local_name(&b.name))).cloned().collect();
+    out.sort_by(|a, b| b.time.cmp(&a.time).then(a.remote.cmp(&b.remote)).then(a.name.cmp(&b.name)));
+    out
+}
+
+/// `feature/x` for the remote branch `origin/feature/x`.
+pub fn local_name(remote_branch: &str) -> &str {
+    remote_branch.split_once('/').map_or(remote_branch, |(_, rest)| rest)
+}
+
+/// Checks out a branch. A remote branch gets a local branch that tracks
+/// it. Git refuses when changes that are not committed would be lost;
+/// then the message says why and nothing changes.
+pub fn switch_branch(root: &Path, name: &str, remote: bool) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root).stdin(std::process::Stdio::null()).env("GIT_TERMINAL_PROMPT", "0");
+    if remote {
+        cmd.args(["switch", "--track", name]);
+    } else {
+        cmd.args(["switch", name]);
+    }
+    let out = cmd.output().map_err(|e| format!("could not run git: {e}"))?;
+    if out.status.success() {
+        return Ok(if remote { local_name(name).to_string() } else { name.to_string() });
+    }
+    let err = String::from_utf8_lossy(&out.stderr);
+    let lines: Vec<&str> = err
+        .lines()
+        .map(|l| l.trim().trim_start_matches("fatal: ").trim_start_matches("error: "))
+        .filter(|l| !l.is_empty() && !l.starts_with("hint:") && *l != "Aborting")
+        .collect();
+    Err(if lines.is_empty() { "git switch did not work".to_string() } else { lines.join(" ") })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,6 +539,81 @@ filename a.rb
         match pull(&mine) {
             Pull::Failed(msg) => assert!(msg.contains("no tracking information"), "{msg}"),
             other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn initials_of_names_and_logins() {
+        assert_eq!(initials("Ana Novak"), "AN");
+        assert_eq!(initials("Ana Maria Novak"), "AN");
+        assert_eq!(initials("anovak"), "AN");
+        assert_eq!(initials("leo-ortiz"), "LO");
+        assert_eq!(initials("mia"), "MI");
+        assert_eq!(initials(""), "");
+    }
+
+    #[test]
+    fn parses_pr_authors() {
+        let json = r#"[
+            {"number": 12, "headRefName": "feature/order-refunds", "author": {"login": "anovak", "name": "Ana Novak"}},
+            {"number": 15, "headRefName": "fix/customer-email", "author": {"login": "leo", "name": ""}}
+        ]"#;
+        let prs = parse_pr_authors(json);
+        assert_eq!(prs["feature/order-refunds"], PrAuthor { number: 12, name: "Ana Novak".into() });
+        assert_eq!(prs["fix/customer-email"].name, "leo");
+        assert!(parse_pr_authors("not json").is_empty());
+    }
+
+    #[test]
+    fn switch_list_is_newest_first_without_doubles() {
+        let b = |name: &str, remote: bool, time: i64| crate::diff::Branch {
+            name: name.into(),
+            remote,
+            time,
+            is_head: false,
+            author: String::new(),
+        };
+        let list = switch_list(&[
+            b("main", false, 100),
+            b("feature/old", false, 50),
+            b("origin/main", true, 100),
+            b("origin/feature/new", true, 300),
+            b("feature/mine", false, 200),
+        ]);
+        let names: Vec<&str> = list.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["origin/feature/new", "feature/mine", "main", "feature/old"]);
+        assert_eq!(local_name("origin/feature/new"), "feature/new");
+    }
+
+    #[test]
+    fn switches_to_a_local_and_a_remote_branch() {
+        let (mine, theirs) = pull_fixture("switch");
+        let run = |cwd: &Path, args: &[&str]| {
+            let out = Command::new("git").current_dir(cwd).args(args).output().unwrap();
+            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        };
+        run(&theirs, &["checkout", "-q", "-b", "feature/refunds"]);
+        commit_and_push_new(&theirs, "feature/refunds");
+        run(&mine, &["fetch", "-q"]);
+        run(&mine, &["branch", "-q", "feature/local"]);
+        assert_eq!(current_branch(&mine).as_deref(), Some("main"));
+        assert_eq!(switch_branch(&mine, "feature/local", false), Ok("feature/local".into()));
+        assert_eq!(current_branch(&mine).as_deref(), Some("feature/local"));
+        assert_eq!(switch_branch(&mine, "origin/feature/refunds", true), Ok("feature/refunds".into()));
+        assert_eq!(current_branch(&mine).as_deref(), Some("feature/refunds"));
+        assert!(std::fs::read_to_string(mine.join("order.rb")).unwrap().contains("refunds"));
+        // A change that the switch would lose: git refuses, and says why.
+        std::fs::write(mine.join("order.rb"), "class Order\n  # mine\nend\n").unwrap();
+        let err = switch_branch(&mine, "main", false).unwrap_err();
+        assert!(err.contains("order.rb"), "{err}");
+        assert_eq!(current_branch(&mine).as_deref(), Some("feature/refunds"));
+    }
+
+    fn commit_and_push_new(repo: &Path, branch: &str) {
+        std::fs::write(repo.join("order.rb"), "class Order\n  has_many :refunds\nend\n").unwrap();
+        for args in [&["commit", "-q", "-am", "Refunds"][..], &["push", "-q", "-u", "origin", branch][..]] {
+            let out = Command::new("git").current_dir(repo).args(args).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         }
     }
 }
