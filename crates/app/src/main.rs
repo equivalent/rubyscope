@@ -15,6 +15,7 @@ mod highlight;
 mod keys;
 mod memory;
 mod picker;
+mod projects;
 #[cfg(test)]
 mod shots;
 mod theme;

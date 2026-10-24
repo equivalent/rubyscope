@@ -3147,6 +3147,7 @@ dependencies = [
  "anyhow",
  "eframe",
  "egui_kittest",
+ "image",
  "notify",
  "nucleo-matcher",
  "rayon",

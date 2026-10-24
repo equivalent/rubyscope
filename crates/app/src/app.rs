@@ -16,6 +16,7 @@ use crate::git::Pull;
 use crate::keys::{self, Action, Keymap};
 use crate::memory::{self, Memory};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
+use crate::projects::{self, Project};
 use crate::theme::Theme;
 use crate::tree::{self, FileTree};
 use crate::view::{self, Clickable, OpenFile};
@@ -110,6 +111,13 @@ pub struct App {
     pending_changes: Vec<PathBuf>,
     last_change: Option<Instant>,
     welcome_path: String,
+    /// Start screen: the project being dragged to a new place.
+    welcome_drag: Option<usize>,
+    /// Start screen: the project being renamed, its new name, and true
+    /// once the name field has the keys.
+    renaming: Option<(usize, String, bool)>,
+    /// Start screen: the icon of each project, None when it has none.
+    project_icons: HashMap<String, Option<egui::TextureHandle>>,
     /// True while the folder dialog is open.
     picking_folder: bool,
     /// Where the folder from the dialog opens: a new window, or this one.
@@ -246,10 +254,13 @@ fn now_secs() -> i64 {
 }
 
 /// Where rubyscope keeps open tabs and recent projects. Tests use a temp
-/// folder, so they never touch the user's state.
+/// folder for each test thread, so they never touch the user's state or
+/// each other's.
 fn state_dir() -> Option<PathBuf> {
     let dir = if cfg!(test) {
-        std::env::temp_dir().join(format!("rubyscope-test-state-{}", std::process::id()))
+        let thread: String =
+            format!("{:?}", std::thread::current().id()).chars().filter(char::is_ascii_digit).collect();
+        std::env::temp_dir().join(format!("rubyscope-test-state-{}-{thread}", std::process::id()))
     } else {
         PathBuf::from(std::env::var_os("HOME")?).join(".local/state/rubyscope")
     };
@@ -296,21 +307,24 @@ fn split_path(rel: &str) -> (&str, &str) {
     }
 }
 
-pub fn recent_projects() -> Vec<String> {
+/// The projects of the start screen, in the order the user gave them.
+pub fn recent_projects() -> Vec<Project> {
     state_dir()
         .and_then(|d| std::fs::read_to_string(d.join("recent.json")).ok())
-        .and_then(|t| serde_json::from_str(&t).ok())
+        .map(|t| projects::parse(&t))
         .unwrap_or_default()
+}
+
+pub fn save_projects(list: &[Project]) {
+    if let Some(d) = state_dir() {
+        let _ = std::fs::write(d.join("recent.json"), serde_json::to_string(list).unwrap_or_default());
+    }
 }
 
 fn remember_project(root: &Path) {
     let mut list = recent_projects();
-    let p = root.display().to_string();
-    list.retain(|x| *x != p);
-    list.insert(0, p);
-    list.truncate(12);
-    if let Some(d) = state_dir() {
-        let _ = std::fs::write(d.join("recent.json"), serde_json::to_string(&list).unwrap_or_default());
+    if projects::add(&mut list, &root.display().to_string()) {
+        save_projects(&list);
     }
 }
 
@@ -390,6 +404,9 @@ impl App {
             pending_changes: Vec::new(),
             last_change: None,
             welcome_path: String::new(),
+            welcome_drag: None,
+            renaming: None,
+            project_icons: HashMap::new(),
             picking_folder: false,
             picked_to_new_window: false,
             toast: None,
@@ -501,8 +518,11 @@ impl App {
         self.open_project(root);
     }
 
+    /// The name the user gave the project, or its folder name.
     fn project_name(&self) -> String {
-        self.root.as_ref().and_then(|r| r.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+        let Some(root) = &self.root else { return String::new() };
+        let path = root.display().to_string();
+        recent_projects().into_iter().find(|p| p.path == path).unwrap_or_else(|| Project::new(&path)).title()
     }
 
     /// Opens a project with an index that is already built (tests).
@@ -1644,11 +1664,9 @@ impl App {
                         browse = true;
                     }
                 });
-                ui.add_space(24.0);
-                for p in recent_projects() {
-                    if ui.link(RichText::new(&p).color(theme.accent)).clicked() {
-                        open = Some(p);
-                    }
+                ui.add_space(32.0);
+                if let Some(p) = self.project_list(ui) {
+                    open = Some(p);
                 }
                 ui.add_space(24.0);
                 if let Some(quit) = self.keys.shortcut(Action::CloseProject) {
@@ -1670,6 +1688,203 @@ impl App {
                 self.toast("That folder does not exist");
             }
         }
+    }
+
+    /// The projects of the start screen: a number key, the icon, the name
+    /// and the path of each. A click opens one, a drag moves it, and the
+    /// three dots rename or remove it. Returns the project to open.
+    fn project_list(&mut self, ui: &mut egui::Ui) -> Option<String> {
+        const NUMBER_KEYS: [egui::Key; 9] = [
+            egui::Key::Num1,
+            egui::Key::Num2,
+            egui::Key::Num3,
+            egui::Key::Num4,
+            egui::Key::Num5,
+            egui::Key::Num6,
+            egui::Key::Num7,
+            egui::Key::Num8,
+            egui::Key::Num9,
+        ];
+        let theme = self.theme.clone();
+        let mut list = recent_projects();
+        if list.is_empty() {
+            return None;
+        }
+        let mut open = None;
+        let mut changed = false;
+        let mut remove = None;
+        // A number opens its project, unless a text field has the keys.
+        if ui.ctx().memory(|m| m.focused().is_none()) {
+            for (i, key) in NUMBER_KEYS.iter().enumerate() {
+                if ui.input_mut(|inp| inp.consume_key(egui::Modifiers::NONE, *key))
+                    && let Some(p) = list.get(i)
+                {
+                    open = Some(p.path.clone());
+                }
+            }
+        }
+        let width = 560.0_f32.min(ui.available_width() - 32.0);
+        let mut rows = Vec::new();
+        for (i, p) in list.iter_mut().enumerate() {
+            let title = p.title();
+            if i > 0 {
+                ui.add_space(6.0);
+            }
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 48.0), egui::Sense::hover());
+            rows.push(rect);
+            let row = ui.interact(rect, egui::Id::unique(("project", &p.path)), egui::Sense::click_and_drag());
+            row.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &title));
+            let renaming = self.renaming.as_ref().is_some_and(|r| r.0 == i);
+            if row.drag_started() {
+                self.welcome_drag = Some(i);
+            }
+            let dragged = self.welcome_drag == Some(i);
+            if row.clicked() && !renaming {
+                open = Some(p.path.clone());
+            }
+            if dragged {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            } else if row.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            let painter = ui.painter_at(rect);
+            let fill = if row.hovered() || dragged { theme.bg_light } else { theme.bg_dark };
+            painter.rect_filled(rect, 6.0, fill);
+            if dragged {
+                painter.rect_stroke(rect, 6.0, egui::Stroke::new(1.0, theme.accent), egui::StrokeKind::Inside);
+            }
+            let y = rect.center().y;
+            // The number key.
+            if i < NUMBER_KEYS.len() {
+                let key = egui::Rect::from_center_size(Pos2::new(rect.left() + 22.0, y), egui::vec2(20.0, 20.0));
+                painter.rect_stroke(key, 4.0, egui::Stroke::new(1.0, theme.muted), egui::StrokeKind::Inside);
+                painter.text(
+                    key.center(),
+                    egui::Align2::CENTER_CENTER,
+                    (i + 1).to_string(),
+                    egui::FontId::monospace(12.0),
+                    theme.fg_dim,
+                );
+            }
+            // The icon, or the first letter of the name.
+            let icon = egui::Rect::from_center_size(Pos2::new(rect.left() + 58.0, y), egui::vec2(24.0, 24.0));
+            let texture = self
+                .project_icons
+                .entry(p.path.clone())
+                .or_insert_with(|| {
+                    projects::find_icon(Path::new(&p.path)).map(|img| {
+                        ui.ctx().load_texture(format!("project-icon-{}", p.path), img, egui::TextureOptions::LINEAR)
+                    })
+                })
+                .clone();
+            if let Some(t) = texture {
+                let uv = egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+                painter.image(t.id(), icon, uv, Color32::WHITE);
+            } else {
+                painter.rect_filled(icon, 5.0, theme.accent.gamma_multiply(0.25));
+                let letter: String = title.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default();
+                painter.text(
+                    icon.center(),
+                    egui::Align2::CENTER_CENTER,
+                    letter,
+                    egui::FontId::proportional(14.0),
+                    theme.accent,
+                );
+            }
+            // The name, and the path under it.
+            let text_left = rect.left() + 84.0;
+            let text_clip = egui::Rect::from_min_max(
+                Pos2::new(text_left, rect.top()),
+                Pos2::new(rect.right() - 44.0, rect.bottom()),
+            );
+            if let Some((_, name, focused)) = self.renaming.as_mut().filter(|_| renaming) {
+                let field = egui::Rect::from_min_max(
+                    Pos2::new(text_left - 4.0, y - 21.0),
+                    Pos2::new(text_clip.right(), y + 1.0),
+                );
+                let edit = ui.place(field, egui::TextEdit::singleline(name).hint_text(&title));
+                if !*focused {
+                    edit.request_focus();
+                    *focused = true;
+                } else if edit.lost_focus() {
+                    if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        let name = name.trim();
+                        p.name = (!name.is_empty()).then(|| name.to_string());
+                        changed = true;
+                    }
+                    self.renaming = None;
+                }
+            } else {
+                ui.painter_at(text_clip).text(
+                    Pos2::new(text_left, y - 9.0),
+                    egui::Align2::LEFT_CENTER,
+                    &title,
+                    egui::FontId::proportional(15.0),
+                    theme.fg_bright,
+                );
+            }
+            ui.painter_at(text_clip).text(
+                Pos2::new(text_left, y + 11.0),
+                egui::Align2::LEFT_CENTER,
+                p.short_path(),
+                egui::FontId::proportional(12.0),
+                theme.fg_dim,
+            );
+            // The three dots: rename or remove.
+            let dots_rect = egui::Rect::from_center_size(Pos2::new(rect.right() - 22.0, y), egui::vec2(26.0, 26.0));
+            let dots = ui.place(dots_rect, egui::Button::new("").frame_when_inactive(false));
+            dots.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("More for {title}")));
+            let color = if dots.hovered() { theme.fg_bright } else { theme.fg_dim };
+            for dx in [-5.0, 0.0, 5.0] {
+                ui.painter().circle_filled(dots_rect.center() + egui::vec2(dx, 0.0), 1.6, color);
+            }
+            egui::Popup::menu(&dots).show(|ui| {
+                ui.set_min_width(160.0);
+                if ui.button("Rename").clicked() {
+                    self.renaming = Some((i, p.name.clone().unwrap_or_default(), false));
+                }
+                if ui.button("Remove from the list").clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        // A drag shows where the project goes, and moves it on release.
+        if let Some(from) = self.welcome_drag {
+            if let Some(pos) = ui.ctx().pointer_interact_pos() {
+                let to = rows.iter().filter(|r| r.center().y < pos.y).count();
+                if to != from && to != from + 1 {
+                    let y = match rows.get(to) {
+                        Some(r) => r.top() - 3.0,
+                        None => rows[rows.len() - 1].bottom() + 3.0,
+                    };
+                    let (l, r) = (rows[0].left(), rows[0].right());
+                    ui.painter().line_segment([Pos2::new(l, y), Pos2::new(r, y)], egui::Stroke::new(2.0, theme.accent));
+                }
+                if ui.input(|i| i.pointer.any_released()) {
+                    projects::move_to(&mut list, from, to);
+                    changed = true;
+                    self.welcome_drag = None;
+                }
+            }
+            if !ui.input(|i| i.pointer.any_down() || i.pointer.any_released()) {
+                self.welcome_drag = None;
+            }
+        }
+        if let Some(i) = remove {
+            list.remove(i);
+            self.renaming = None;
+            changed = true;
+        }
+        if changed {
+            save_projects(&list);
+        }
+        ui.add_space(12.0);
+        ui.label(
+            RichText::new("Press 1 to 9 to open a project. Drag a project to change its number.")
+                .color(theme.muted)
+                .small(),
+        );
+        open
     }
 
     fn toolbar(&mut self, ui: &mut egui::Ui) {
@@ -1906,7 +2121,8 @@ impl App {
             if ui.add(egui::Button::new("Back to the project list").shortcut_text(&close_key)).clicked() {
                 choice = Some(Choice::List);
             }
-            let recent: Vec<String> = recent_projects().into_iter().filter(|p| Some(p) != current.as_ref()).collect();
+            let recent: Vec<String> =
+                recent_projects().into_iter().map(|p| p.path).filter(|p| Some(p) != current.as_ref()).collect();
             if !recent.is_empty() {
                 ui.separator();
                 ui.label(RichText::new("Recent projects").color(theme.fg_dim).small());

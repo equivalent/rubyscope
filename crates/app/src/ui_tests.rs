@@ -1679,3 +1679,87 @@ fn the_folder_button_opens_go_to_file() {
     assert_eq!(h.state().picker.as_ref().map(|p| p.kind), Some(crate::picker::PickerKind::Files));
     shot(&mut h, "53-folder-button");
 }
+
+/// The start screen, with these projects in its list.
+fn start_screen(projects: &[&Path]) -> Harness<'static, App> {
+    let list: Vec<crate::projects::Project> =
+        projects.iter().map(|p| crate::projects::Project::new(&p.display().to_string())).collect();
+    crate::app::save_projects(&list);
+    let mut h =
+        Harness::builder().with_size([1000.0, 700.0]).wgpu().build_eframe(|cc| App::new(&cc.egui_ctx, None, None));
+    let _ = h.run_ok();
+    h
+}
+
+fn listed() -> Vec<String> {
+    crate::app::recent_projects().into_iter().map(|p| p.title()).collect()
+}
+
+#[test]
+fn a_number_key_opens_that_project() {
+    let (shop, blog) = (fixture_named("num-shop"), fixture_named("num-blog"));
+    // The shop has an icon; the blog shows its first letter.
+    std::fs::create_dir_all(shop.join("public")).unwrap();
+    image::RgbaImage::from_pixel(32, 32, image::Rgba([220, 60, 60, 255]))
+        .save(shop.join("public/favicon.png"))
+        .unwrap();
+    let mut h = start_screen(&[&shop, &blog]);
+    shot(&mut h, "54-project-list");
+    press(&mut h, Modifiers::NONE, Key::Num2);
+    assert_eq!(h.state().root.as_deref(), Some(blog.as_path()));
+}
+
+#[test]
+fn a_project_can_be_renamed_and_removed() {
+    let (shop, blog) = (fixture_named("ren-shop"), fixture_named("ren-blog"));
+    let shop_name = shop.file_name().unwrap().to_string_lossy().to_string();
+    let blog_name = blog.file_name().unwrap().to_string_lossy().to_string();
+    let mut h = start_screen(&[&shop, &blog]);
+    h.get_by_label(&format!("More for {shop_name}")).click();
+    let _ = h.run_ok();
+    h.get_by_label("Rename").click();
+    let _ = h.run_ok();
+    type_text(&mut h, "Shop app");
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    assert_eq!(listed(), ["Shop app", blog_name.as_str()]);
+    // The folder keeps its name; the list shows the new one.
+    assert!(shop.is_dir());
+    h.get_by_label("Shop app");
+    h.get_by_label("More for Shop app").click();
+    let _ = h.run_ok();
+    h.get_by_label("Remove from the list").click();
+    let _ = h.run_ok();
+    assert_eq!(listed(), [blog_name.as_str()]);
+}
+
+#[test]
+fn a_drag_moves_a_project_to_another_number() {
+    let (a, b, c) = (fixture_named("drag-a"), fixture_named("drag-b"), fixture_named("drag-c"));
+    let names: Vec<String> =
+        [&a, &b, &c].iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
+    let mut h = start_screen(&[&a, &b, &c]);
+    let from = h.get_by_label(&names[2]).rect().center();
+    let to = h.get_by_label(&names[0]).rect().center() - Vec2::new(0.0, 20.0);
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let _ = h.run_ok();
+    for step in 1..=10 {
+        h.event(Event::PointerMoved(from + (to - from) * (step as f32 / 10.0)));
+        let _ = h.run_ok();
+    }
+    shot(&mut h, "55-project-drag");
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    let _ = h.run_ok();
+    assert_eq!(listed(), [names[2].as_str(), names[0].as_str(), names[1].as_str()]);
+    assert!(h.state().root.is_none());
+}
