@@ -1763,3 +1763,33 @@ fn a_drag_moves_a_project_to_another_number() {
     assert_eq!(listed(), [names[2].as_str(), names[0].as_str(), names[1].as_str()]);
     assert!(h.state().root.is_none());
 }
+
+#[test]
+fn the_sun_and_moon_button_switches_dark_and_light_mode() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/services/billing.rb");
+    // Dark is the default.
+    assert!(h.state().theme.dark);
+    shot(&mut h, "55-dark-mode");
+    h.get_by_label("Light mode").click();
+    h.run();
+    assert!(!h.state().theme.dark);
+    shot(&mut h, "56-light-mode");
+    // A new window starts in the mode chosen last.
+    let mut again = harness(&root);
+    assert!(!again.state().theme.dark);
+    again.get_by_label("Dark mode").click();
+    again.run();
+    assert!(again.state().theme.dark);
+    assert!(harness(&root).state().theme.dark);
+}
+
+#[test]
+fn the_start_screen_has_the_mode_button() {
+    let mut h = start_screen(&[]);
+    h.get_by_label("Light mode").click();
+    let _ = h.run_ok();
+    assert!(!h.state().theme.dark);
+    shot(&mut h, "57-start-screen-light");
+}

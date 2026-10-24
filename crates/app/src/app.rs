@@ -118,6 +118,7 @@ pub struct App {
     renaming: Option<(usize, String, bool)>,
     /// Start screen: the icon of each project, None when it has none.
     project_icons: HashMap<String, Option<egui::TextureHandle>>,
+    brand_logo: Option<egui::TextureHandle>,
     /// True while the folder dialog is open.
     picking_folder: bool,
     /// Where the folder from the dialog opens: a new window, or this one.
@@ -236,6 +237,51 @@ fn pull_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
         egui::Stroke::NONE,
     ));
     r
+}
+
+/// A small square button that switches dark and light mode: a sun in
+/// dark mode, a moon in light mode. Both are drawn, like the pull button.
+/// Its name for screen readers and tests is "Light mode" or "Dark mode",
+/// the mode a click turns on.
+fn mode_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
+    let side = ui.spacing().interact_size.y;
+    let r = ui.add(egui::Button::new("").min_size(egui::vec2(side, side)));
+    let name = if theme.dark { "Light mode" } else { "Dark mode" };
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+    let color = if r.hovered() { theme.fg_bright } else { theme.fg };
+    let c = r.rect.center();
+    let painter = ui.painter();
+    if theme.dark {
+        // The sun: a disc and 8 rays.
+        painter.circle_filled(c, side * 0.16, color);
+        let stroke = egui::Stroke::new(1.5, color);
+        for i in 0..8 {
+            let a = std::f32::consts::TAU * i as f32 / 8.0;
+            let d = egui::vec2(a.cos(), a.sin());
+            painter.line_segment([c + d * side * 0.24, c + d * side * 0.34], stroke);
+        }
+    } else {
+        // The moon: a disc with a disc of the button color over one side.
+        let fill = if r.hovered() {
+            ui.visuals().widgets.hovered.weak_bg_fill
+        } else {
+            ui.visuals().widgets.inactive.weak_bg_fill
+        };
+        painter.circle_filled(c, side * 0.3, color);
+        painter.circle_filled(c + egui::vec2(side * 0.15, -side * 0.1), side * 0.26, fill);
+    }
+    r
+}
+
+/// The saved mode: dark unless the user chose light.
+fn saved_dark() -> bool {
+    state_dir().and_then(|d| std::fs::read_to_string(d.join("mode")).ok()).map(|m| m.trim() != "light").unwrap_or(true)
+}
+
+fn save_dark(dark: bool) {
+    if let Some(d) = state_dir() {
+        let _ = std::fs::write(d.join("mode"), if dark { "dark" } else { "light" });
+    }
 }
 
 /// After `]` opened a file: its first change (or its last one for `[`),
@@ -372,7 +418,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
 impl App {
     pub fn new(ctx: &egui::Context, root: Option<PathBuf>, open: Option<(PathBuf, Option<u32>)>) -> App {
         setup_fonts(ctx);
-        let theme = Theme::load();
+        let theme = Theme::load(saved_dark());
         theme.apply(ctx);
         let mut app = App {
             root: None,
@@ -407,6 +453,7 @@ impl App {
             welcome_drag: None,
             renaming: None,
             project_icons: HashMap::new(),
+            brand_logo: None,
             picking_folder: false,
             picked_to_new_window: false,
             toast: None,
@@ -1011,6 +1058,17 @@ impl App {
 
     fn changed_title(&self) -> String {
         format!("Go to changed file (vs {})", self.repo.as_ref().map(|r| r.base.as_str()).unwrap_or("…"))
+    }
+
+    /// Switches between dark and light mode, and keeps the choice for the
+    /// next start.
+    pub fn toggle_mode(&mut self, ctx: &egui::Context) {
+        let dark = !self.theme.dark;
+        self.theme = Theme::load(dark);
+        self.theme.apply(ctx);
+        // The logo of the start screen has a dark and a light version.
+        self.brand_logo = None;
+        save_dark(dark);
     }
 
     fn toggle_blame(&mut self) {
@@ -1640,9 +1698,31 @@ impl App {
         let theme = self.theme.clone();
         let mut open = None;
         let mut browse = false;
+        let mut toggle_mode = false;
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(theme.bg)).show(ui, |ui| {
-            ui.add_space(80.0);
+            ui.add_space(6.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                ui.add_space(6.0);
+                let hint = if theme.dark { "Switch to light mode" } else { "Switch to dark mode" };
+                toggle_mode = mode_button(ui, &theme).on_hover_text(hint).clicked();
+            });
             ui.vertical_centered(|ui| {
+                let logo = self.brand_logo.get_or_insert_with(|| {
+                    let bytes: &[u8] = if theme.dark {
+                        include_bytes!("../../../packaging/icon/rubyscope-dark.png")
+                    } else {
+                        include_bytes!("../../../packaging/icon/rubyscope-light.png")
+                    };
+                    let image = image::load_from_memory(bytes).expect("valid brand logo").to_rgba8();
+                    let size = [image.width() as usize, image.height() as usize];
+                    ui.ctx().load_texture(
+                        "rubyscope-logo",
+                        egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
+                        egui::TextureOptions::LINEAR,
+                    )
+                });
+                ui.image((logo.id(), egui::vec2(96.0, 96.0)));
+                ui.add_space(8.0);
                 ui.label(RichText::new("Rubyscope").size(32.0).color(theme.fg_bright));
                 ui.label(
                     RichText::new(format!("Read Ruby code. {}+click to go to a definition.", keys::CMD))
@@ -1674,6 +1754,9 @@ impl App {
                 }
             });
         });
+        if toggle_mode {
+            self.toggle_mode(ui.ctx());
+        }
         if browse {
             self.pick_folder(false);
         }
@@ -1934,6 +2017,10 @@ impl App {
                     self.open_path(&path, Some(loc.name_span.start), None, true);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let hint = if theme.dark { "Switch to light mode" } else { "Switch to dark mode" };
+                    if mode_button(ui, &theme).on_hover_text(hint).clicked() {
+                        self.toggle_mode(ui.ctx());
+                    }
                     if ui.button("Commands").on_hover_text(format!("{}+K", keys::CMD)).clicked() {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }

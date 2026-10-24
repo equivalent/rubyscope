@@ -1,6 +1,8 @@
 //! Colors from the current Omarchy theme
 //! (`~/.local/state/omarchy/current/theme/colors.toml`), with Tokyo Night
-//! as the default when there is none.
+//! as the default when there is none. The app is dark or light, as the
+//! user chooses with the sun and moon button; the Omarchy theme is used
+//! only when it is of the same mode, else Tokyo Night or Tokyo Night Day.
 
 use std::path::PathBuf;
 
@@ -79,6 +81,32 @@ impl Default for Theme {
     }
 }
 
+impl Theme {
+    /// Tokyo Night Day, the light Tokyo Night.
+    pub fn light() -> Theme {
+        let c = |s| hex(s).expect("valid color");
+        Theme {
+            dark: false,
+            bg: c("#e1e2e7"),
+            bg_dark: c("#d0d5e3"),
+            bg_light: c("#c4c8da"),
+            fg: c("#3760bf"),
+            fg_dim: c("#848cb5"),
+            fg_bright: c("#1f2a52"),
+            accent: c("#2e7de9"),
+            selection: c("#b7c1e3"),
+            muted: c("#a8aecb"),
+            red: c("#f52a65"),
+            yellow: c("#8c6c3e"),
+            orange: c("#b15c00"),
+            green: c("#587539"),
+            cyan: c("#007197"),
+            blue: c("#2e7de9"),
+            magenta: c("#9854f1"),
+        }
+    }
+}
+
 pub fn omarchy_colors_path() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     let p = PathBuf::from(home).join(".local/state/omarchy/current/theme/colors.toml");
@@ -86,12 +114,19 @@ pub fn omarchy_colors_path() -> Option<PathBuf> {
 }
 
 impl Theme {
-    /// The Omarchy theme, or the default.
-    pub fn load() -> Theme {
-        omarchy_colors_path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .map(|t| Theme::from_toml(&t))
-            .unwrap_or_default()
+    /// The Omarchy theme when it is dark (or light, for `dark: false`),
+    /// else the default of that mode.
+    pub fn load(dark: bool) -> Theme {
+        let omarchy = omarchy_colors_path().and_then(|p| std::fs::read_to_string(p).ok()).map(|t| Theme::from_toml(&t));
+        Theme::pick(dark, omarchy)
+    }
+
+    fn pick(dark: bool, omarchy: Option<Theme>) -> Theme {
+        match omarchy {
+            Some(t) if t.dark == dark => t,
+            _ if dark => Theme::default(),
+            _ => Theme::light(),
+        }
     }
 
     /// Reads an Omarchy `colors.toml`. Missing keys keep the default.
@@ -188,5 +223,17 @@ mod tests {
         assert_eq!(t.accent, Color32::from_rgb(255, 0, 0));
         // Keys that are missing keep the default.
         assert_eq!(t.green, Theme::default().green);
+    }
+
+    #[test]
+    fn uses_omarchy_only_in_its_own_mode() {
+        let light = Theme::from_toml("mode = \"light\"\nbackground = \"#ffffff\"\n");
+        let dark = Theme::from_toml("background = \"#000000\"\n");
+        assert_eq!(Theme::pick(false, Some(light.clone())).bg, Color32::from_rgb(255, 255, 255));
+        assert_eq!(Theme::pick(true, Some(light)).bg, Theme::default().bg);
+        assert_eq!(Theme::pick(true, Some(dark.clone())).bg, Color32::from_rgb(0, 0, 0));
+        assert_eq!(Theme::pick(false, Some(dark)).bg, Theme::light().bg);
+        assert!(!Theme::pick(false, None).dark);
+        assert!(Theme::pick(true, None).dark);
     }
 }
