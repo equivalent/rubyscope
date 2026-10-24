@@ -1,11 +1,11 @@
-# rubyscope v1 plan
+# Rubyscope v1 plan
 
 Status: steps 1–6 built and tested on 2026-10-20. See "Status" at the end
 for what is done, the numbers, and what is not done yet.
 
-## What rubyscope is
+## What Rubyscope is
 
-rubyscope is a desktop app for **reading** Ruby code. It is not an editor.
+Rubyscope is a desktop app for **reading** Ruby code. It is not an editor.
 You open a project folder and click around the code. Ctrl+click on a
 class, module, method, constant, route helper, i18n key, partial, RSpec `let`
 or factory goes to its definition. The aim is RubyMine-level depth for "go
@@ -32,7 +32,7 @@ to definition" and "find usages".
 | Keys | Short list (below). Everything else is done with the mouse and the Ctrl+K command list. |
 | Git blame | Side panel on the left of the code, Ctrl+B shows or hides it |
 | Git | Local repo first. |
-| Permission | rubyscope development may run `bundle install` and read-only `bin/rails runner` in the test project |
+| Permission | Rubyscope development may run `bundle install` and read-only `bin/rails runner` in the test project |
 
 ## Facts about large Rails apps that the design must handle
 
@@ -191,13 +191,13 @@ Each rule says which methods a DSL call makes:
   `validate :check_total`, `after_commit :notify`. The symbol is a link to
   the method.
 - `send(:x)` and `public_send(:x)` with a literal symbol.
-- Database columns: rubyscope reads `db/schema.rb` (or `structure.sql`), so
+- Database columns: Rubyscope reads `db/schema.rb` (or `structure.sql`), so
   `invoice.total_cents` goes to the column line.
 - Phlex kits: `Button(...)` inside a kit goes to `UI::Button`.
 
 ### 5. Routes
 
-- rubyscope reads `config/routes.rb` and follows `draw :name` into
+- Rubyscope reads `config/routes.rb` and follows `draw :name` into
   `config/routes/<name>.rb`.
 - It understands `resources`, `resource`, `namespace`, `scope`, `member`,
   `collection`, `get` / `post` / `patch` / `put` / `delete`, `root`, `as:`,
@@ -211,7 +211,7 @@ Each rule says which methods a DSL call makes:
 
 ### 6. i18n
 
-- rubyscope reads all locale YAML files with line numbers and flattens the
+- Rubyscope reads all locale YAML files with line numbers and flattens the
   keys (`en.invoices.show.title` → file and line).
 - `t("a.b")` and `I18n.t("a.b")` go to the key in every locale. A popup
   lets you choose the locale.
@@ -244,7 +244,7 @@ Each rule says which methods a DSL call makes:
 
 ### 10. Gems and core Ruby
 
-- rubyscope reads `Gemfile.lock` and finds each gem folder in the gem
+- Rubyscope reads `Gemfile.lock` and finds each gem folder in the gem
   directory, including git gems under `bundler/gems`. It indexes `lib/`
   and `app/` (for engines).
 - Core classes (`String`, `Hash`, ...) are written in C. Their methods go to
@@ -263,7 +263,7 @@ Each rule says which methods a DSL call makes:
   (`instance_method(:x).source_location`), after `eager_load!`.
 
 The probe is optional. When it can not run (for example, no Ruby or no
-database config), rubyscope reads the `push_dir` calls in the initializers
+database config), Rubyscope reads the `push_dir` calls in the initializers
 and uses Rails defaults.
 
 The probe does not write to the database.
@@ -299,7 +299,7 @@ The probe does not write to the database.
 | Action | What it does |
 |---|---|
 | Ctrl+click on a symbol | Go to the definition (or a choose list when there are many) |
-| Hover over a symbol | Docs, signature, and the type that rubyscope found |
+| Hover over a symbol | Docs, signature, and the type that Rubyscope found |
 | Right-click on a symbol | Menu: find usages, type hierarchy, call hierarchy, copy name, open in nvim |
 | Mouse side buttons, ← → buttons | Back and forward |
 | Click on the breadcrumb | Go to that class or method |
@@ -353,7 +353,7 @@ rubyscope-cli check probe.json                  # compare the index with the Rai
 
 1. **Rails probe check.** The probe gives the real location of every
    constant and method in the project. `rubyscope-cli check` prints the percentage
-   that rubyscope finds at the same file and line, and lists the misses.
+   that Rubyscope finds at the same file and line, and lists the misses.
 2. **Golden click tests.** A golden file has real click points from a
    project with the expected target: one line per click,
    `file:line:col → file:line`. They cover constants, DSL methods, variable
@@ -427,7 +427,7 @@ Each step ends with something that works.
 - Git blame panel (Ctrl+B).
 - Hover docs, type hierarchy, call hierarchy.
 - Omarchy theme colors, desktop launcher (`.desktop` file), open in nvim.
-- **Done when:** rubyscope is the tool used every day to read the project.
+- **Done when:** Rubyscope is the tool used every day to read the project.
 
 ### Later (not in v1)
 
@@ -439,7 +439,7 @@ Each step ends with something that works.
 
 - Methods with names that only exist at runtime (`define_method` with a
   variable name, `method_missing`, `class_eval` with a string) can not be
-  found by reading the code. RubyMine can not find them either. rubyscope
+  found by reading the code. RubyMine can not find them either. Rubyscope
   shows the name-search list.
 - Some variable types are guesses. The app always shows when it guesses.
 - Without the Rails probe, custom Zeitwerk setups are read from the

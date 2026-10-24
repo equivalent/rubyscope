@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds rubyscope and installs it for this user on macOS:
+# Builds Rubyscope and installs it for this user on macOS:
 #   ~/Applications/rubyscope.app (open it from Spotlight, Launchpad or the Dock)
 #   ~/.local/bin/rubyscope and ~/.local/bin/rubyscope-cli
 set -euo pipefail

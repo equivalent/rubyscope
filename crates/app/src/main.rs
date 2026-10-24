@@ -1,4 +1,4 @@
-//! rubyscope: a desktop app for reading Ruby code.
+//! Rubyscope: a desktop app for reading Ruby code.
 //!
 //!     rubyscope [FOLDER] [FILE[:LINE]]
 
@@ -67,7 +67,7 @@ fn main() -> eframe::Result {
     }
 
     // The window class. A test run can set its own, so window rules for it
-    // do not touch normal rubyscope windows.
+    // do not touch normal Rubyscope windows.
     let app_id = std::env::var("RUBYSCOPE_APP_ID").unwrap_or_else(|_| "rubyscope".into());
     // Wayland takes the icon from the desktop entry of the app id; X11 and
     // macOS take this one.
@@ -75,7 +75,7 @@ fn main() -> eframe::Result {
         .expect("the app icon is a valid PNG");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("rubyscope")
+            .with_title("Rubyscope")
             .with_app_id(app_id)
             .with_icon(icon)
             .with_inner_size([1400.0, 900.0])

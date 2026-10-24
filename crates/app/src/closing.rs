@@ -67,7 +67,7 @@ impl Closing {
             .frame(egui::Frame::popup(&ctx.global_style()).fill(theme.bg_light).inner_margin(14.0))
             .show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new("Closing rubyscope").strong().color(theme.fg_bright));
+                ui.label(RichText::new("Closing Rubyscope").strong().color(theme.fg_bright));
                 ui.add_space(6.0);
                 ui.label(RichText::new(format!("{}…", step.label())).color(theme.fg));
                 ui.add_space(6.0);

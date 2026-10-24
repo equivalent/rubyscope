@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds rubyscope and installs it for this user:
+# Builds Rubyscope and installs it for this user:
 #   ~/.local/bin/rubyscope and ~/.local/bin/rubyscope-cli
 #   ~/.local/share/applications/rubyscope.desktop (the app launcher entry)
 #   ~/.local/share/icons/hicolor/*/apps/rubyscope.{svg,png} (the app icon)
@@ -16,4 +16,4 @@ for size in 16 32 48 64 128 256 512; do
 done
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$icons" || true
 command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" || true
-echo "Installed rubyscope. Run: rubyscope <project folder>"
+echo "Installed Rubyscope. Run: rubyscope <project folder>"

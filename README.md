@@ -1,14 +1,14 @@
-# rubyscope
+# Rubyscope
 
-rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl (Cmd
+Rubyscope is a desktop app for reading Ruby and Rails code. Hold Ctrl (Cmd
 on macOS) and click a name to go to its definition. The name can be a class, module,
 constant, method, route helper, translation key, partial, RSpec `let` or
-factory. rubyscope reads code only. It never changes a file.
+factory. Rubyscope reads code only. It never changes a file.
 
 It is for people who read large Rails apps and want go-to-definition as
 good as RubyMine's, in a small native app that starts in about one second.
 
-rubyscope is not:
+Rubyscope is not:
 
 - an editor. To change a file, open it in your editor from rubyscope.
 - a language server (LSP). It does not connect to an editor.
@@ -19,7 +19,7 @@ the end tells what is done.
 
 ## Requirements
 
-- Linux or macOS. On Linux, rubyscope is built and used on Wayland
+- Linux or macOS. On Linux, Rubyscope is built and used on Wayland
   (Hyprland). The build also has X11 support, but it is not checked. On
   macOS it runs on Apple silicon.
 - Rust 1.88 or newer.
@@ -29,7 +29,7 @@ the end tells what is done.
 
 | Tool | What it gives |
 |---|---|
-| `ruby` | Gems and the standard library in the index. rubyscope asks mise or rbenv (`mise which ruby`, `rbenv which ruby`) for the Ruby of the project folder, else it runs the `ruby` on `PATH`. |
+| `ruby` | Gems and the standard library in the index. Rubyscope asks mise or rbenv (`mise which ruby`, `rbenv which ruby`) for the Ruby of the project folder, else it runs the `ruby` on `PATH`. |
 | Installed gems (`bundle install`) | Clicks that go into gem source. Only gems that are installed are indexed. |
 | `git` | Git blame, diff mode and "Open on GitHub" |
 | `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit |
@@ -67,7 +67,7 @@ It builds the release binaries and installs:
 - `~/.local/bin/rubyscope-cli` (the test command)
 
 An app started from Finder or the Dock gets only the system `PATH`. So on
-macOS, rubyscope reads the `PATH` from your login shell when it starts.
+macOS, Rubyscope reads the `PATH` from your login shell when it starts.
 Then `ruby`, `mise` and `rbenv` are found the same way as in the
 terminal.
 
@@ -78,7 +78,7 @@ cargo build --release
 target/release/rubyscope ~/code/shop
 ```
 
-## Start rubyscope
+## Start Rubyscope
 
 ```
 rubyscope ~/code/shop                                # open a project folder
@@ -88,15 +88,18 @@ rubyscope                                            # see below
 
 - With a file and no folder, the project is the nearest parent folder that
   has `.git` or a `Gemfile`.
-- With no arguments, rubyscope opens the current folder when it has `.git`
+- With no arguments, Rubyscope opens the current folder when it has `.git`
   or a `Gemfile`. Otherwise it shows the start screen.
 - The start screen has a path field (`~/` is allowed), a "Browse…" button
-  for the system folder dialog, and the recent projects. Click a recent
-  project to open it.
+  for the system folder dialog, and your projects. Click a project, or
+  press its number (1 to 9), to open it. Drag a project to change its
+  number. The "…" button of a project renames it in the list (the folder
+  keeps its name) or removes it from the list. The list shows the icon of
+  a project when it has one, such as `public/favicon.ico`.
 - Ctrl+O opens the system folder dialog at any time.
 - There is one window for each project. When a project is open, Ctrl+O
   opens the new folder in a new window.
-- rubyscope remembers the open tabs of each project and opens them again
+- Rubyscope remembers the open tabs of each project and opens them again
   at the next start.
 - The app launcher entry also lets a file manager open a folder or a `.rb`
   file with rubyscope.
@@ -111,7 +114,7 @@ rubyscope                                            # see below
    file tree. Press Ctrl+T to find a class, module, method or constant by
    name.
 3. Hold Ctrl. The names that you can click get an underline. Click one to
-   go to its definition. When there are several definitions, rubyscope
+   go to its definition. When there are several definitions, Rubyscope
    shows a list. When a class is opened in many files, it goes to the main
    file and tells you how many files there are. A click on the name where
    a class, module or constant is defined (`class Order`, `PREFIX = "x"`)
@@ -122,7 +125,7 @@ rubyscope                                            # see below
    the bottom. Click a row to go there. For a method, the "callers" button
    on a row shows who calls the method around that row.
 6. Rest the pointer on a name for about half a second. A popup shows the
-   signature, the docs, the definition location, the type that rubyscope
+   signature, the docs, the definition location, the type that Rubyscope
    found and how sure it is.
 7. Press Ctrl+B to show git blame. Each line shows the date and the last name
    of the author, as in RubyMine. The newest commits have the strongest blue.
@@ -229,7 +232,7 @@ can give them one (see below).
 "Open in editor" uses `omarchy-launch-editor` when it is on `PATH`.
 Otherwise it opens nvim in a terminal with `xdg-terminal-exec`, or runs
 `nvim`. On macOS it opens nvim in a new Terminal window. The first time,
-macOS asks if rubyscope can control Terminal. "Open on GitHub" needs an `origin` remote on github.com. It opens
+macOS asks if Rubyscope can control Terminal. "Open on GitHub" needs an `origin` remote on github.com. It opens
 the line at the commit that `HEAD` points to.
 
 ### Change the keys
@@ -252,7 +255,7 @@ A key is modifiers and one key, joined with `+`. The modifiers are `cmd`,
 file works on both. `ctrl` is always the Ctrl key. The key can be a letter, a digit, `esc`, `tab`, `enter`,
 `space`, `left`, `right`, `up`, `down`, `[`, `]` or `f1` to `f12`. A
 command can have several keys: give a list, as for `next_change` above.
-rubyscope reads this file when it starts.
+Rubyscope reads this file when it starts.
 
 The names of the commands that have a default key:
 
@@ -311,7 +314,7 @@ Rest the pointer on a ghost row to see why.
 - Click the diff bar, or choose "Diff against branch…" in Ctrl+K, to pick
   another base branch from the local and remote branches. The current base
   and the default (`main`, else `master`, else what `origin/HEAD` points
-  to) are marked. rubyscope remembers the choice for each project. Pick
+  to) are marked. Rubyscope remembers the choice for each project. Pick
   your own pushed branch (`origin/feature/x`) to see what is not pushed
   yet.
 - ] and [ (or Alt+↓ and Alt+↑) go to the next and previous change. The
@@ -334,7 +337,7 @@ Rest the pointer on a ghost row to see why.
 
 The diffs are made with `git` in the background. They are made again when
 an open file changes on disk, and when `HEAD` or the base branch moves (a
-commit, a checkout, a fetch; rubyscope looks every 4 seconds). Outside a
+commit, a checkout, a fetch; Rubyscope looks every 4 seconds). Outside a
 git repository, the diff bar says so and nothing is marked. When the base
 branch does not exist any more, the diff bar says so and only the changes
 that are not committed are shown.
@@ -342,7 +345,7 @@ that are not committed are shown.
 The round arrow next to "Diff" runs `git pull` for the branch that is
 checked out. It follows your `pull.rebase` setting, and merges when there
 is none. A message at the bottom says how many commits came in. When the
-pull stops on conflicts, rubyscope does not fix or abort anything: the
+pull stops on conflicts, Rubyscope does not fix or abort anything: the
 message names the files, and you fix them in git or run
 `git merge --abort` (or `git rebase --abort`). When git refuses (no
 upstream branch, changes that the pull would overwrite), the message
@@ -357,15 +360,15 @@ branches that have no local branch of the same name. A remote branch
 gets a local branch that tracks it.
 
 Next to each branch are the initials of the author of its open pull
-request, with the number and the name on the right. rubyscope gets them
+request, with the number and the name on the right. Rubyscope gets them
 with `gh pr list`, so they show only when `gh` is logged in. A branch
 without a pull request shows the initials of the author of its last
 commit, dimmed.
 
-rubyscope runs `git switch`. Changes that are not committed stay. When
+Rubyscope runs `git switch`. Changes that are not committed stay. When
 the switch would lose them, git refuses and the message says why. After
 a switch, the open files are read again and the project is indexed
-again. The button also follows a switch made outside rubyscope, within a
+again. The button also follows a switch made outside Rubyscope, within a
 few seconds.
 
 ## What a click understands
@@ -406,7 +409,7 @@ few seconds.
 
 ## How it works
 
-1. **Find files.** rubyscope lists the project files and respects
+1. **Find files.** Rubyscope lists the project files and respects
    `.gitignore`. It reads `Gemfile.lock` and asks the project's Ruby where
    the gems and the standard library are. From each installed gem it reads `lib/`
    and `app/`.
@@ -429,16 +432,16 @@ definitions, each with how sure it is.
 
 The saved index is in `~/.cache/rubyscope/<project>-<hash>.bin`, or in
 `$XDG_CACHE_HOME/rubyscope/` when `XDG_CACHE_HOME` is set. For a large
-Rails app with its gems the file is about 125 MB. rubyscope maps the file
+Rails app with its gems the file is about 125 MB. Rubyscope maps the file
 into memory and does not read all of it. The references of a file are read
 from it only when a click or "find usages" needs them.
 
-At the next start rubyscope parses only the files whose size or change
+At the next start Rubyscope parses only the files whose size or change
 time is different. Then it links everything again. For a large app (about
 7,000 Ruby files and 340 gems) the index is ready in less than 1 s with
 the saved index, and in about 2.3 s without it.
 
-rubyscope does not use the saved index when:
+Rubyscope does not use the saved index when:
 
 - the index code is different (a new build with new parse rules). The
   saved file has a fingerprint of that code.
@@ -452,7 +455,7 @@ saved index.
 
 - Methods with names that exist only at runtime (`define_method` with a
   variable name, `method_missing`, `class_eval` with a string) cannot be
-  found by reading the code. For these, rubyscope shows the list of
+  found by reading the code. For these, Rubyscope shows the list of
   methods with that name ("name only").
 - Some variable types are guesses. The hover always shows when a type is
   a guess.
@@ -468,14 +471,14 @@ saved index.
   after a new index as with the saved index. The first "find usages"
   adds about 100 MB for the list of names.
 
-## Files that rubyscope writes
+## Files that Rubyscope writes
 
-rubyscope never writes into the project folder.
+Rubyscope never writes into the project folder.
 
 | Path | What it holds |
 |---|---|
 | `~/.cache/rubyscope/` (or `$XDG_CACHE_HOME/rubyscope/`) | The saved index of each project |
-| `~/.local/state/rubyscope/recent.json` | The recent projects (up to 12) |
+| `~/.local/state/rubyscope/recent.json` | The projects of the start screen, in your order, with the names you gave them |
 | `~/.local/state/rubyscope/session*.json` | The open tabs of each project |
 | `~/.local/state/rubyscope/diff*.json` | The base branch of diff mode for each project |
 
@@ -495,13 +498,13 @@ It reads `~/.config/rubyscope/keys.toml` (keys) and
 
 | Problem | What to do |
 |---|---|
-| A click goes to an old line, or a new method is not found | Press Ctrl+K and choose "Index the project again". If this does not help, close rubyscope and delete `~/.cache/rubyscope/`. |
-| A click on a gem name or a Rails method does nothing | Run `ruby -v` and `bundle install` in the project folder. rubyscope indexes only gems that are installed for the Ruby that the project uses. |
+| A click goes to an old line, or a new method is not found | Press Ctrl+K and choose "Index the project again". If this does not help, close Rubyscope and delete `~/.cache/rubyscope/`. |
+| A click on a gem name or a Rails method does nothing | Run `ruby -v` and `bundle install` in the project folder. Rubyscope indexes only gems that are installed for the Ruby that the project uses. |
 | Blame does not show | The project must be a git repository, and `git` must be on `PATH`. |
 | Diff mode marks nothing | The diff bar in the top bar tells why: not a git repository, or the base branch is not found. Click it to choose a base branch. |
 | "This project has no GitHub remote" | The `origin` remote must be on github.com. |
 | A blame click opens the commit, not the pull request | Install the GitHub CLI (`gh`) and log in. |
-| You want to see what the index does | Start rubyscope from a terminal. It prints a line such as `rubyscope: indexed 9000 files in 0.71 s, 9000 from the saved index`. |
+| You want to see what the index does | Start Rubyscope from a terminal. It prints a line such as `rubyscope: indexed 9000 files in 0.71 s, 9000 from the saved index`. |
 
 ## Command-line test tool
 
@@ -600,7 +603,7 @@ RUBYSCOPE_PROJECT=~/code/shop cargo test -p rubyscope real_project_smoke -- --no
 | `crates/app` | The window (egui), binary `rubyscope` |
 | `probe/rails_probe.rb` | The script that gets real locations from booted Rails |
 | `plans/001-rubyscope-v1.md` | The design plan, with its status at the end |
-| `bin/install` | Builds and installs rubyscope for this user |
+| `bin/install` | Builds and installs Rubyscope for this user |
 | `bin/ci` | Runs every check before a push: formatting, clippy, tests, private paths |
 | `packaging/rubyscope.desktop` | The app launcher entry |
 | `webpage/` | The web page and the docs, plain HTML and CSS (see `webpage/README.md`) |

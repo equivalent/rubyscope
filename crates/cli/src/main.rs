@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 use rubyscope_index::{BuildOptions, FileId, Index, Loc};
 
 #[derive(Parser)]
-#[command(name = "rubyscope-cli", about = "Test tool for the rubyscope index")]
+#[command(name = "rubyscope-cli", about = "Test tool for the Rubyscope index")]
 struct Cli {
     /// The project folder.
     #[arg(long, short, default_value = ".")]

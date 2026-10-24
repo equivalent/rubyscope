@@ -351,7 +351,7 @@ pub struct RepoStatus {
     /// The base branch, and whether it exists.
     pub base: String,
     pub base_missing: bool,
-    /// The branch rubyscope picks when none was chosen.
+    /// The branch Rubyscope picks when none was chosen.
     pub default_base: String,
     /// The checked-out branch (or a short commit when detached).
     pub head_name: String,

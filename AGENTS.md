@@ -1,6 +1,6 @@
-# Rules for agents working on rubyscope
+# Rules for agents working on Rubyscope
 
-This repo is public. rubyscope is tested on private Rails apps. Nothing about
+This repo is public. Rubyscope is tested on private Rails apps. Nothing about
 those apps may get into a committed file.
 
 - Never name a real project, company, client or private repo in code, tests,

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>rubyscope</string>
+  <string>Rubyscope</string>
   <key>CFBundleDisplayName</key>
-  <string>rubyscope</string>
+  <string>Rubyscope</string>
   <key>CFBundleIdentifier</key>
   <string>work.equivalent.rubyscope</string>
   <key>CFBundleExecutable</key>

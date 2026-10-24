@@ -89,7 +89,7 @@ rubyscope ~/code/shop/app/models/order.rb:40      <span class="c"># open a file 
 rubyscope                                         <span class="c"># the current folder, or the start screen</span></code></pre>
         <ul>
           <li>With a file and no folder, the project is the nearest parent folder that has <code>.git</code> or a <code>Gemfile</code>.</li>
-          <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your recent projects.</li>
+          <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your projects. Click a project or press its number to open it, and drag a project to change its number. The "…" button of a project renames it in the list or removes it.</li>
           <li><kbd>Ctrl</kbd> <kbd>O</kbd> opens the system folder dialog. When a project is already open, the new one opens in a new window.</li>
           <li>Rubyscope remembers the open tabs of each project and opens them again next time.</li>
         </ul>
@@ -344,7 +344,7 @@ reindex = "f5"</code></pre>
           <thead><tr><th scope="col">Path</th><th scope="col">What it holds</th></tr></thead>
           <tbody>
             <tr><td><code>~/.cache/rubyscope/</code></td><td>The saved index of each project</td></tr>
-            <tr><td><code>~/.local/state/rubyscope/recent.json</code></td><td>The recent projects, up to twelve</td></tr>
+            <tr><td><code>~/.local/state/rubyscope/recent.json</code></td><td>The projects of the start screen, in your order, with the names you gave them</td></tr>
             <tr><td><code>~/.local/state/rubyscope/session*.json</code></td><td>The open tabs of each project</td></tr>
             <tr><td><code>~/.local/state/rubyscope/diff*.json</code></td><td>The base branch of diff mode for each project</td></tr>
           </tbody>

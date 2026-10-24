@@ -10,7 +10,7 @@
 #   and ignored folders,
 # - the real source location of every named constant and method.
 #
-# rubyscope uses the autoload roots for its file rules, and
+# Rubyscope uses the autoload roots for its file rules, and
 # `rubyscope-cli check` compares the locations with its own index.
 
 require "json"

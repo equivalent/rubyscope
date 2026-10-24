@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=rubyscope
+Name=Rubyscope
 GenericName=Ruby code browser
 Comment=Read Ruby code: Ctrl+click to go to a definition
 Exec=rubyscope %F

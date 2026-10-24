@@ -8,7 +8,7 @@
 //! it. Most of the size is in the bodies.
 //!
 //! The saved file is mapped into memory, not read. The bodies stay in the
-//! file, so the system can drop their pages when it needs memory. rubyscope
+//! file, so the system can drop their pages when it needs memory. Rubyscope
 //! never changes a saved file: `write` writes a new file and renames it, so
 //! a map of the old file stays valid.
 //!
@@ -194,7 +194,7 @@ pub fn file_for(cache_dir: &Path, project: &Path) -> PathBuf {
 /// Reads a saved index. Fails when there is none, or when other code saved it.
 pub fn read(path: &Path) -> Result<Reuse> {
     let file = std::fs::File::open(path).with_context(|| format!("reading {}", path.display()))?;
-    // SAFETY: rubyscope never changes a saved file in place (see the top of
+    // SAFETY: Rubyscope never changes a saved file in place (see the top of
     // this file). Every length in the file is checked before it is used.
     let map = Arc::new(unsafe { memmap2::Mmap::map(&file) }.with_context(|| format!("mapping {}", path.display()))?);
     let bytes: &[u8] = map.as_ref();

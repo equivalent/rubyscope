@@ -1,4 +1,4 @@
-//! rubyscope's Ruby index: parses Ruby files with Prism, joins them into
+//! Rubyscope's Ruby index: parses Ruby files with Prism, joins them into
 //! one table of namespaces, constants and methods, and resolves clicks.
 
 pub mod cache;

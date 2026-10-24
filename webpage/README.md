@@ -1,4 +1,4 @@
-# rubyscope web page
+# Rubyscope web page
 
 The landing page (`index.html`) and the docs (`docs/index.html`, served at
 `/docs/`). Plain HTML and CSS, with one small script. No build step.
@@ -6,7 +6,7 @@ The landing page (`index.html`) and the docs (`docs/index.html`, served at
 | Path | What it holds |
 |---|---|
 | `index.html` | The landing page |
-| `docs/index.html` | How to use rubyscope: mouse, keys, settings |
+| `docs/index.html` | How to use Rubyscope: mouse, keys, settings |
 | `css/site.css` | The styles of both pages |
 | `js/site.js` | The header line and the docs contents |
 | `fonts/` | Schibsted Grotesk and JetBrains Mono (SIL Open Font License) |

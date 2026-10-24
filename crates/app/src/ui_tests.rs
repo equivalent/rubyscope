@@ -1601,7 +1601,7 @@ fn closing_with_nothing_running_quits_at_once() {
     ask_to_close(&mut h);
     assert!(h.state().quit);
     assert!(asked_to_close(&h));
-    assert!(h.query_by_label("Closing rubyscope").is_none());
+    assert!(h.query_by_label("Closing Rubyscope").is_none());
 }
 
 #[test]
@@ -1620,7 +1620,7 @@ fn closing_waits_for_the_index_save_and_shows_it() {
     // A new window area shows from its second frame.
     h.step();
     h.step();
-    h.get_by_label("Closing rubyscope");
+    h.get_by_label("Closing Rubyscope");
     h.get_by_label("Saving the index…");
     shot(&mut h, "closing");
     let c = h.state().closing.as_ref().unwrap();

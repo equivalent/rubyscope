@@ -1,4 +1,4 @@
-//! The rubyscope window: panels, tabs, navigation and actions.
+//! The Rubyscope window: panels, tabs, navigation and actions.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -253,7 +253,7 @@ fn now_secs() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
-/// Where rubyscope keeps open tabs and recent projects. Tests use a temp
+/// Where Rubyscope keeps open tabs and recent projects. Tests use a temp
 /// folder for each test thread, so they never touch the user's state or
 /// each other's.
 fn state_dir() -> Option<PathBuf> {
@@ -1643,7 +1643,7 @@ impl App {
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(theme.bg)).show(ui, |ui| {
             ui.add_space(80.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new("rubyscope").size(32.0).color(theme.fg_bright));
+                ui.label(RichText::new("Rubyscope").size(32.0).color(theme.fg_bright));
                 ui.label(
                     RichText::new(format!("Read Ruby code. {}+click to go to a definition.", keys::CMD))
                         .color(theme.fg_dim),
@@ -2017,7 +2017,7 @@ impl App {
                 let text = memory::label(bytes);
                 ui.label(small("·".into()));
                 ui.label(small(text.clone())).on_hover_text(format!(
-                    "rubyscope uses {text} of RAM now: the resident memory of this process, read every 2 seconds."
+                    "Rubyscope uses {text} of RAM now: the resident memory of this process, read every 2 seconds."
                 ));
             }
         });
@@ -2860,9 +2860,9 @@ impl App {
     fn update_title(&mut self, ctx: &egui::Context) {
         let project = self.root.as_ref().and_then(|r| r.file_name()).map(|n| n.to_string_lossy().to_string());
         let title = match (project, self.current()) {
-            (Some(p), Some(t)) => format!("rubyscope — {p} — {}", t.rel),
-            (Some(p), None) => format!("rubyscope — {p}"),
-            _ => "rubyscope".to_string(),
+            (Some(p), Some(t)) => format!("Rubyscope — {p} — {}", t.rel),
+            (Some(p), None) => format!("Rubyscope — {p}"),
+            _ => "Rubyscope".to_string(),
         };
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

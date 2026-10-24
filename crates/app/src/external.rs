@@ -1,4 +1,4 @@
-//! Opening things outside rubyscope: the editor, the browser.
+//! Opening things outside Rubyscope: the editor, the browser.
 
 use std::path::Path;
 use std::process::{Command, Stdio};

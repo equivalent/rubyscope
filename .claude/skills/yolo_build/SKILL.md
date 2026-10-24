@@ -3,7 +3,7 @@ name: yolo_build
 description: Use when the user says "yolo rebuild", "yellow rebuild", "yolo build" or runs /yolo_build. Pulls the latest main of this repo, rebuilds the app for this computer (Linux on Linux, macOS on macOS) and installs it as the current executable. The phrase is the permission — do not ask first.
 ---
 
-# yolo_build — pull main, rebuild rubyscope, install it here
+# yolo_build — pull main, rebuild Rubyscope, install it here
 
 Saying "yolo rebuild" (or "yellow rebuild", the same thing) is Tomas's permission to do all of
 these steps. Do not ask first. This changes only the local install. It never pushes or commits.
