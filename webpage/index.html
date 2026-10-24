@@ -161,7 +161,7 @@
         <article class="feature">
           <div class="feature-text">
             <h3>Git blame next to the code</h3>
-            <p>Press <kbd>Ctrl</kbd> <kbd>B</kbd>. Each line shows the date and the author, and newer lines get a stronger blue. Click a block to open the commit, or its pull request, on GitHub.</p>
+            <p>Press <kbd>Ctrl</kbd> <kbd>B</kbd>, or click Blame in the top bar. Each line shows the date and the author, and newer lines get a stronger blue. Click a block to open the commit, or its pull request, on GitHub.</p>
           </div>
           <div class="shots">
             <figure class="shot">
@@ -173,8 +173,74 @@
 
         <article class="feature">
           <div class="feature-text">
+            <h3>Read a branch like a pull request</h3>
+            <p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd>, or click Diff. Lines your branch added are green, removed lines show as red rows between the real lines, and changes that are not committed yet are amber. The code is still the real file, so <kbd>Ctrl</kbd>+click and the hover keep working.</p>
+            <ul>
+              <li>The diff starts where your branch left <code>main</code>, as on GitHub</li>
+              <li><kbd>]</kbd> and <kbd>[</kbd> go from change to change, and on to the next changed file</li>
+              <li>The file tree opens the folders with changes, and a Changes tab lists them</li>
+            </ul>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/diff.webp" width="2560" height="1520" loading="lazy"
+                   alt="order.rb in diff mode. Added lines have a green bar, a removed line is a red struck-through row, and a line that is not committed is amber. The diff bar at the top says main…feature/order-refunds +11 −1, 1 uncommitted.">
+              <figcaption>The diff bar at the top says what is compared. Click it to pick another base branch.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Pull and switch branches from the top bar</h3>
+            <p>The round arrow runs <code>git pull</code> in the background. The button with the branch name lists the branches, the newest first, with the initials of the pull request author. Pick one to switch. Rubyscope reads the open files again and updates the index.</p>
+            <ul>
+              <li>On conflicts it names the files and fixes nothing</li>
+              <li>It also follows a switch made in the terminal</li>
+              <li>The top bar shows how much RAM Rubyscope uses</li>
+            </ul>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/branches.webp" width="2100" height="470" loading="lazy"
+                   alt="The branch list under the branch button, with feature/order-refunds, fix/email-case and main, each with the initials of an author. The side bar shows the Changes tab.">
+              <figcaption>The branch list, next to the Changes tab of the side bar.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Dark or light</h3>
+            <p>The sun and moon button at the right end of the top bar switches between dark and light, and Rubyscope keeps your choice. On Omarchy it uses the colors of your theme when the theme is of the same mode. Otherwise it uses Tokyo Night or Tokyo Night Day.</p>
+          </div>
+          <div class="shots">
+            <figure class="shot">
+              <img src="img/shots/light.webp" width="2560" height="1520" loading="lazy"
+                   alt="Rubyscope in light mode, with the hover popup over order.ship! and the usages of Order in the panel below.">
+              <figcaption>The same window in light mode.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
+            <h3>Your projects, one key away</h3>
+            <p>The start screen lists your projects as numbered cards. Press a number to open that project, or drag a card to change its number. The "…" button renames a project in the list or removes it. A project shows its own icon when it has one.</p>
+          </div>
+          <div class="shots">
+            <figure class="shot narrow">
+              <img src="img/shots/start-screen.webp" width="1320" height="1000" loading="lazy"
+                   alt="The start screen with the Rubyscope logo, a path field, and three numbered project cards: shop, billing and blog.">
+              <figcaption>Press <kbd>1</kbd> to open the shop.</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-text">
             <h3>Keys for everything</h3>
-            <p><kbd>Ctrl</kbd> <kbd>P</kbd> finds a file. <kbd>Ctrl</kbd> <kbd>T</kbd> finds a class, method or constant in the project and its gems. <kbd>Ctrl</kbd> <kbd>K</kbd> lists every command. Scroll with <kbd>j</kbd> and <kbd>k</kbd>, and go to the top with <kbd>g</kbd><kbd>g</kbd>, as in Vim.</p>
+            <p><kbd>Ctrl</kbd> <kbd>P</kbd> finds a file. <kbd>Ctrl</kbd> <kbd>T</kbd> finds a class, method or constant in the project and its gems. <kbd>Ctrl</kbd> <kbd>K</kbd> lists every command. <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd> turns diff mode on, and <kbd>]</kbd> and <kbd>[</kbd> go from change to change. Scroll with <kbd>j</kbd> and <kbd>k</kbd>, and go to the top with <kbd>g</kbd><kbd>g</kbd>, as in Vim. Every key can be changed in one small file.</p>
             <p><a href="docs/#keys">All keys</a></p>
           </div>
           <div class="shots">

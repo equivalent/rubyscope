@@ -55,7 +55,8 @@ and saves it as WebP.
 webpage/bin/shots
 ```
 
-It needs python3 with Pillow. On a Linux machine without a GPU, install
+It needs python3 with Pillow. The shots use the Tokyo Night colors, not
+the Omarchy theme of the machine. On a Linux machine without a GPU, install
 Mesa's lavapipe driver and point `VK_ICD_FILENAMES` at its
 `lvp_icd.json`. The code font is what `fc-match monospace` gives; a Nerd
 Font has every symbol the window uses.

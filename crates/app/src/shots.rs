@@ -8,9 +8,11 @@ use std::time::Duration;
 
 use eframe::egui::{Event, Key, Modifiers, PointerButton, Pos2};
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use rubyscope_index::{BuildOptions, Index};
 
 use crate::app::App;
+use crate::theme::Theme;
 
 const CMD: Modifiers = if crate::keys::MAC { Modifiers::MAC_CMD } else { Modifiers::CTRL };
 
@@ -322,10 +324,40 @@ fn harness(root: &Path) -> Harness<'static, App> {
     let mut h =
         Harness::builder().with_size([1280.0, 760.0]).with_pixels_per_point(2.0).wgpu().build_eframe(move |cc| {
             let mut app = App::new(&cc.egui_ctx, None, None);
+            tokyo_night(&mut app, &cc.egui_ctx);
             app.open_prebuilt(root.clone(), index.clone());
             app
         });
     h.run_ok();
+    h
+}
+
+/// The shots use Tokyo Night, not the Omarchy theme of the machine that
+/// makes them.
+fn tokyo_night(app: &mut App, ctx: &eframe::egui::Context) {
+    app.theme = Theme::default();
+    app.theme.apply(ctx);
+}
+
+fn light(h: &mut Harness<'static, App>) {
+    let ctx = h.ctx.clone();
+    let app = h.state_mut();
+    app.theme = Theme::light();
+    app.theme.apply(&ctx);
+    settle(h);
+}
+
+/// The start screen with three made-up projects.
+fn start_screen() -> Harness<'static, App> {
+    let list: Vec<crate::projects::Project> =
+        ["~/code/shop", "~/code/billing", "~/code/blog"].iter().map(|p| crate::projects::Project::new(p)).collect();
+    crate::app::save_projects(&list);
+    let mut h = Harness::builder().with_size([1280.0, 760.0]).with_pixels_per_point(2.0).wgpu().build_eframe(|cc| {
+        let mut app = App::new(&cc.egui_ctx, None, None);
+        tokyo_night(&mut app, &cc.egui_ctx);
+        app
+    });
+    settle(&mut h);
     h
 }
 
@@ -497,6 +529,19 @@ fn shots() {
     settle(&mut h);
     shot(&mut h, "go-to-file");
 
+    // The same window in light mode.
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    ctrl_click(&mut h, 2, 9);
+    open(&mut h, &root, "app/services/shipping.rb");
+    light(&mut h);
+    hover(&mut h, 11, 14);
+    shot(&mut h, "light");
+
+    // The start screen: the projects as numbered cards.
+    let mut h = start_screen();
+    shot(&mut h, "start-screen");
+
     // Diff mode: a branch that adds refunds, and a change that is not
     // committed yet. The last shot, as it changes the shop.
     diff_branch(&root);
@@ -510,6 +555,18 @@ fn shots() {
     press(&mut h, Modifiers::NONE, Key::CloseBracket);
     settle(&mut h);
     shot(&mut h, "diff");
+    shot(&mut h, "top-bar");
+
+    // The branch button opens the list of branches, with the Changes tab
+    // of the side bar next to it.
+    h.get_by_label_contains("Changes").click();
+    settle(&mut h);
+    h.get_by_label("feature/order-refunds").click();
+    for _ in 0..40 {
+        std::thread::sleep(Duration::from_millis(50));
+        let _ = h.run_ok();
+    }
+    shot(&mut h, "branches");
 }
 
 /// Puts the shop on a branch `feature/order-refunds` with one commit, and
@@ -533,6 +590,11 @@ fn diff_branch(root: &Path) {
             "  # Marks the order as shipped",
             "  # The money that can still go back to the customer, in cents.\n  def refundable_cents\n    total_cents - refunds.sum(:amount_cents)\n  end\n\n  # Marks the order as shipped",
         );
+    // A second branch, so the branch list has more than main.
+    git(&["checkout", "-q", "-b", "fix/email-case"]);
+    std::fs::write(root.join("app/models/customer.rb"), "# Someone who buys in the shop.\nclass Customer < ApplicationRecord\n  has_many :orders\n  normalizes :email, with: ->(e) { e.strip.downcase }\nend\n").unwrap();
+    git(&["commit", "-q", "-am", "Store emails in lower case"]);
+    git(&["checkout", "-q", "main"]);
     git(&["checkout", "-q", "-b", "feature/order-refunds"]);
     std::fs::write(root.join("app/models/order.rb"), &order).unwrap();
     std::fs::write(

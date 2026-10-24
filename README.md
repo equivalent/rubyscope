@@ -32,10 +32,10 @@ the end tells what is done.
 | `ruby` | Gems and the standard library in the index. Rubyscope asks mise or rbenv (`mise which ruby`, `rbenv which ruby`) for the Ruby of the project folder, else it runs the `ruby` on `PATH`. |
 | Installed gems (`bundle install`) | Clicks that go into gem source. Only gems that are installed are indexed. |
 | `git` | Git blame, diff mode and "Open on GitHub" |
-| `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit |
+| `gh` (GitHub CLI) | A click on a blame block opens the pull request of the commit, not only the commit. The branch list shows who opened the pull request of each branch. |
 | `fc-match` (fontconfig) | Linux: the system monospace font for code. macOS uses Menlo. |
 | `xdg-open` | Linux: opens links in the browser. macOS uses `open`. |
-| Omarchy | Colors from the current Omarchy theme. Without Omarchy, the colors are Tokyo Night. |
+| Omarchy | Colors from the current Omarchy theme, when it is of the mode you chose (dark or light). Otherwise the colors are Tokyo Night or Tokyo Night Day. |
 
 ## Build and install
 
@@ -95,8 +95,12 @@ rubyscope                                            # see below
   press its number (1 to 9), to open it. Drag a project to change its
   number. The "…" button of a project renames it in the list (the folder
   keeps its name) or removes it from the list. The list shows the icon of
-  a project when it has one, such as `public/favicon.ico`.
+  a project when it has one, such as `public/favicon.ico`. The sun and
+  moon button at the top right switches dark and light mode (see "Dark
+  and light mode").
 - Ctrl+O opens the system folder dialog at any time.
+- Click the project name in the top bar to go back to the project list,
+  or to open a recent project in this window or in a new window.
 - There is one window for each project. When a project is open, Ctrl+O
   opens the new folder in a new window.
 - Rubyscope remembers the open tabs of each project and opens them again
@@ -127,7 +131,7 @@ rubyscope                                            # see below
 6. Rest the pointer on a name for about half a second. A popup shows the
    signature, the docs, the definition location, the type that Rubyscope
    found and how sure it is.
-7. Press Ctrl+B to show git blame. Each line shows the date and the last name
+7. Press Ctrl+B (or click Blame in the top bar) to show git blame. Each line shows the date and the last name
    of the author, as in RubyMine. The newest commits have the strongest blue.
    Rest the pointer on a blame line to see the commit. Click it to open the commit, or its pull request, on GitHub.
 8. Press Ctrl+K to see all commands. Some commands have no key, for example
@@ -140,7 +144,7 @@ rubyscope                                            # see below
 
 | Part | What it has |
 |---|---|
-| Top bar | Back and forward, the file path, the breadcrumb, the "Commands" button, the pull button, the branch button, the "Diff" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go to it. In diff mode, also the diff bar (see "Diff mode"). |
+| Top bar | From the left: the folder button (Go to file, like Ctrl+P), back and forward, the project name (a menu: back to the project list, or another project here or in a new window), the file path and the breadcrumb. The breadcrumb shows the class and method at the cursor. Click a part to go to it. On the right: the diff bar in diff mode (see "Diff mode"), the index numbers and the RAM that Rubyscope uses, the "Diff" and "Blame" buttons (blue while on), the branch button, the pull button, "Commands" and the sun and moon button. Each number and button explains itself on hover. |
 | Side bar | Two tabs. "Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files. |
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
 | Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
@@ -164,6 +168,12 @@ rubyscope                                            # see below
 | Middle-click a tab | Close the tab |
 | Click the diff bar in the top bar | Diff against another branch |
 | Click a mark on the right edge (diff mode) | Go to that change |
+| The folder button at the top left | Go to file (like Ctrl+P) |
+| Click the project name in the top bar | Back to the project list, or open a recent project |
+| "Diff" and "Blame" in the top bar | Turn diff mode or git blame on and off |
+| The branch button | Switch branches (see "Switch branches") |
+| The round arrow | `git pull` for the branch |
+| The sun or the moon | Switch to light or dark mode |
 
 ## Keys
 
@@ -185,7 +195,10 @@ Ctrl, as in Vim.
 | Ctrl+B | Show or hide git blame |
 | Ctrl+Shift+D | Diff mode on or off |
 | Ctrl+Shift+B | Show or hide the side bar |
+| Ctrl+Q | Close the project and go back to the project list; on the project list, quit |
 | Esc | Close a popup, then the find bar, then the frame of the current change, then the results panel |
+| 1 to 9 | On the start screen: open that project |
+| Tab | In Ctrl+P, in diff mode: all files or only the changed files |
 
 Ctrl+F and Ctrl+Shift+F start with the selected text, when it is on one
 line.
@@ -205,7 +218,8 @@ These keys scroll the code when no text field has focus:
 | ] / [, Alt+↓ / Alt+↑ | Diff mode: next / previous change |
 
 The mouse wheel scrolls the code 8 times faster than the egui default, and
-the side bar 2.5 times faster.
+the side bar 2.5 times faster. Hold Shift to scroll the code a page at
+a time.
 
 ### Commands without a key
 
@@ -262,6 +276,7 @@ The names of the commands that have a default key:
 | Name | Default |
 |---|---|
 | `open_folder` | Ctrl+O |
+| `close_project` | Ctrl+Q |
 | `go_to_file` | Ctrl+P |
 | `go_to_symbol` | Ctrl+T |
 | `search_project` | Ctrl+Shift+F |
@@ -332,6 +347,8 @@ Rest the pointer on a ghost row to see why.
 - The "Changes" tab in the side bar lists the files changed on the branch
   (against the base) and the files that are not committed (against
   `HEAD`), with the lines added and removed.
+- When diff mode turns on, the file tree opens the folders that hold
+  changed files.
 - Blame (Ctrl+B) works in diff mode too. Lines that are not committed say
   "not committed" in amber, and ghost rows have an empty, striped cell.
 
@@ -370,6 +387,28 @@ the switch would lose them, git refuses and the message says why. After
 a switch, the open files are read again and the project is indexed
 again. The button also follows a switch made outside Rubyscope, within a
 few seconds.
+
+## Dark and light mode
+
+Rubyscope starts dark. The sun button at the right end of the top bar,
+or at the top right of the start screen, switches to light mode; the moon
+switches back. The choice is kept for the next start.
+
+On Omarchy, Rubyscope uses the colors of the current theme when the theme
+is of the chosen mode. Otherwise it uses Tokyo Night in dark mode and
+Tokyo Night Day in light mode.
+
+## Close and quit
+
+Ctrl+Q closes the project and goes back to the project list. On the
+project list, Ctrl+Q quits.
+
+Closing the window first saves the open tabs, stops the file watcher, and
+waits for an index save, a pull or a branch switch that still runs. When
+that takes longer than 150 ms, a dialog shows the step and a progress
+bar. Close the window again to quit at once. After 10 seconds Rubyscope
+quits anyway. It then ends without freeing its memory piece by piece; the
+system does that.
 
 ## What a click understands
 
@@ -481,6 +520,7 @@ Rubyscope never writes into the project folder.
 | `~/.local/state/rubyscope/recent.json` | The projects of the start screen, in your order, with the names you gave them |
 | `~/.local/state/rubyscope/session*.json` | The open tabs of each project |
 | `~/.local/state/rubyscope/diff*.json` | The base branch of diff mode for each project |
+| `~/.local/state/rubyscope/mode` | Dark or light mode |
 
 It reads `~/.config/rubyscope/keys.toml` (keys) and
 `~/.local/state/omarchy/current/theme/colors.toml` (colors).

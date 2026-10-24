@@ -5,7 +5,7 @@
   <link rel="icon" href="../favicon.ico" type="image/x-icon" sizes="16x16 32x32 48x48 64x64 128x128 256x256">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Docs: how to use Rubyscope, mouse and keys</title>
-  <meta name="description" content="How to install and use Rubyscope: open a project, go to definitions, find usages, git blame, every mouse action and keyboard shortcut, and how to change the keys.">
+  <meta name="description" content="How to install and use Rubyscope: open a project, go to definitions, find usages, git blame, diff mode, branches, dark and light mode, every mouse action and keyboard shortcut, and how to change the keys.">
   <link rel="preload" href="../fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../css/site.css">
 </head>
@@ -38,6 +38,9 @@
         <li><a href="#commands">Commands without a key</a></li>
         <li><a href="#change-keys">Change the keys</a></li>
         <li><a href="#diff">Diff mode</a></li>
+        <li><a href="#branches">Pull and switch branches</a></li>
+        <li><a href="#mode">Dark and light mode</a></li>
+        <li><a href="#quit">Close and quit</a></li>
         <li><a href="#clicks">What a click understands</a></li>
         <li><a href="#index">The saved index</a></li>
         <li><a href="#limits">Limits</a></li>
@@ -73,10 +76,10 @@ bin/install</code></pre>
           <tbody>
             <tr><td><code>ruby</code></td><td>Gems and the standard library in the index. Rubyscope asks mise or rbenv for the Ruby of the project, else it uses the <code>ruby</code> on <code>PATH</code>.</td></tr>
             <tr><td><code>bundle install</code></td><td>Clicks that go into gem source. Only installed gems are indexed.</td></tr>
-            <tr><td><code>git</code></td><td>Git blame and "Open on GitHub".</td></tr>
-            <tr><td><code>gh</code></td><td>A click on a blame block opens the pull request of the commit, not only the commit.</td></tr>
+            <tr><td><code>git</code></td><td>Git blame, diff mode, pull, switching branches and "Open on GitHub".</td></tr>
+            <tr><td><code>gh</code></td><td>A click on a blame block opens the pull request of the commit, not only the commit. The branch list shows who opened the pull request of each branch.</td></tr>
             <tr><td><code>fc-match</code></td><td>Linux: the system monospace font. macOS uses Menlo.</td></tr>
-            <tr><td>Omarchy</td><td>Colors from the current Omarchy theme. Without it, the colors are Tokyo Night.</td></tr>
+            <tr><td>Omarchy</td><td>Colors from the current Omarchy theme, when it is of the mode you chose (dark or light). Otherwise the colors are Tokyo Night or Tokyo Night Day.</td></tr>
           </tbody>
         </table>
       </section>
@@ -88,10 +91,16 @@ rubyscope ~/code/shop/app/models/order.rb:40      <span class="c"># open a file 
 rubyscope                                         <span class="c"># the current folder, or the start screen</span></code></pre>
         <ul>
           <li>With a file and no folder, the project is the nearest parent folder that has <code>.git</code> or a <code>Gemfile</code>.</li>
-          <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your projects. Click a project or press its number to open it, and drag a project to change its number. The "…" button of a project renames it in the list or removes it.</li>
+          <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your projects. Click a project or press its number (<kbd>1</kbd> to <kbd>9</kbd>) to open it, and drag a project to change its number. The "…" button of a project renames it in the list (the folder keeps its name) or removes it. A project shows its icon when it has one, such as <code>public/favicon.ico</code>. The sun and moon button at the top right switches between dark and light mode.</li>
           <li><kbd>Ctrl</kbd> <kbd>O</kbd> opens the system folder dialog. When a project is already open, the new one opens in a new window.</li>
+          <li>Click the project name in the top bar to go back to the project list, or to open a recent project in this window or a new one.</li>
           <li>Rubyscope remembers the open tabs of each project and opens them again next time.</li>
         </ul>
+        <figure class="shot narrow">
+          <img src="../img/shots/start-screen.webp" width="1320" height="1000" loading="lazy"
+               alt="The start screen with a path field, Open and Browse buttons, and three numbered project cards.">
+          <figcaption>The start screen. Press a number to open that project.</figcaption>
+        </figure>
       </section>
 
       <section id="first-steps">
@@ -103,8 +112,9 @@ rubyscope                                         <span class="c"># the current 
           <li>Go back with the mouse back button or the back button in the top bar. The forward button goes forward again.</li>
           <li>Right-click a name and choose "Find usages". The results panel opens at the bottom. For a method, the "callers" button on a row shows who calls the method around that row.</li>
           <li>Rest the pointer on a name for half a second. A popup shows the signature, the docs, where it is defined, the type Rubyscope found and how sure it is.</li>
-          <li>Press <kbd>Ctrl</kbd> <kbd>B</kbd> to show git blame. Newer commits get a stronger blue. Click a blame line to open the commit, or its pull request, on GitHub.</li>
+          <li>Press <kbd>Ctrl</kbd> <kbd>B</kbd>, or click Blame in the top bar, to show git blame. Newer commits get a stronger blue. Click a blame line to open the commit, or its pull request, on GitHub.</li>
           <li>Press <kbd>Ctrl</kbd> <kbd>K</kbd> to see every command.</li>
+          <li>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd>, or click Diff, to see what your branch changed. <kbd>]</kbd> and <kbd>[</kbd> go from change to change. See <a href="#diff">Diff mode</a>.</li>
         </ol>
         <figure class="shot">
           <img src="../img/shots/hover.webp" width="1658" height="960" loading="lazy"
@@ -118,14 +128,19 @@ rubyscope                                         <span class="c"># the current 
         <table>
           <thead><tr><th scope="col">Part</th><th scope="col">What it has</th></tr></thead>
           <tbody>
-            <tr><td>Top bar</td><td>Back and forward, the project name, the file path, the breadcrumb, the "Commands" button, the pull button (a round arrow: <code>git pull</code> for the branch; on conflicts it names the files and fixes nothing), the branch button (a list of branches, newest first, with the initials of the pull request author; a click runs <code>git switch</code>), the "Diff" button and the index status. The breadcrumb shows the class and method at the cursor. Click a part to go there.</td></tr>
-            <tr><td>Side bar</td><td>"Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file.</td></tr>
+            <tr><td>Top bar</td><td>From the left: the folder button (Go to file), back and forward, the project name (a menu to go back to the project list or open another project), the file path and the breadcrumb. The breadcrumb shows the class and method at the cursor; click a part to go there. On the right: the diff bar in diff mode, the index numbers and the RAM that Rubyscope uses, the "Diff" and "Blame" buttons (blue while on), the branch button, the pull button (a round arrow), "Commands" and the sun and moon button. Rest the pointer on a number or a button to see what it means.</td></tr>
+            <tr><td>Side bar</td><td>"Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files.</td></tr>
             <tr><td>Tabs</td><td>One tab for each open file. Middle-click a tab to close it. Right-click it for more.</td></tr>
             <tr><td>Action bar</td><td>Only in a view file: a link to its controller action or mailer method, for example <code>OrdersController#show</code>. It does not scroll with the code.</td></tr>
             <tr><td>Code</td><td>Drag to select text. Double-click selects a word. <kbd>Ctrl</kbd> <kbd>C</kbd> copies.</td></tr>
             <tr><td>Results panel</td><td>Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers.</td></tr>
           </tbody>
         </table>
+        <figure class="shot">
+          <img src="../img/shots/top-bar.webp" width="2560" height="64" loading="lazy"
+               alt="The top bar: folder, back, forward, shop, app/models/order.rb › Order, the diff bar, 465 MB, ready, Diff, Blame, feature/order-refunds, the pull arrow, Commands and the sun.">
+          <figcaption>The top bar in diff mode.</figcaption>
+        </figure>
         <figure class="shot">
           <img src="../img/shots/view-from-action.webp" width="1402" height="1036" loading="lazy"
                alt="A view file with the action bar above the code, linking to OrdersController#show.">
@@ -150,6 +165,14 @@ rubyscope                                         <span class="c"># the current 
             <tr><td>Click a blame block</td><td>Open the commit, or its pull request, on GitHub.</td></tr>
             <tr><td>"callers" in the results</td><td>Who calls that method, one level up.</td></tr>
             <tr><td>Middle-click a tab</td><td>Close the tab.</td></tr>
+            <tr><td>The folder button at the top left</td><td>Go to file, as <kbd>Ctrl</kbd> <kbd>P</kbd>.</td></tr>
+            <tr><td>Click the project name</td><td>Back to the project list, or open a recent project here or in a new window.</td></tr>
+            <tr><td>"Diff" and "Blame"</td><td>Turn diff mode or git blame on and off.</td></tr>
+            <tr><td>The branch button</td><td>A list of branches. Pick one to switch to it.</td></tr>
+            <tr><td>The round arrow</td><td>Run <code>git pull</code> for the branch.</td></tr>
+            <tr><td>The sun or the moon</td><td>Switch to light or dark mode.</td></tr>
+            <tr><td>Click the diff bar</td><td>Diff against another branch.</td></tr>
+            <tr><td>Click a mark on the right edge</td><td>Diff mode: go to that change.</td></tr>
           </tbody>
         </table>
         <figure class="shot">
@@ -179,6 +202,8 @@ rubyscope                                         <span class="c"># the current 
             <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd></td><td>Show or hide the side bar</td></tr>
             <tr><td><kbd>Ctrl</kbd> <kbd>Q</kbd></td><td>Close the project and go back to the project list. Press it again to quit.</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Close a popup, then the find bar, then the frame of the current change, then the results panel</td></tr>
+            <tr><td><kbd>1</kbd> to <kbd>9</kbd></td><td>On the start screen: open that project</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>In <kbd>Ctrl</kbd> <kbd>P</kbd>, in diff mode: switch between all files and the changed files</td></tr>
           </tbody>
         </table>
         <p><kbd>Ctrl</kbd> <kbd>F</kbd> and <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> start with the selected text when it is on one line.</p>
@@ -214,7 +239,7 @@ rubyscope                                         <span class="c"># the current 
             <tr><td><kbd>]</kbd> <kbd>[</kbd> or <kbd>Alt</kbd> <kbd>↓</kbd> <kbd>Alt</kbd> <kbd>↑</kbd></td><td>Diff mode: the next or previous change</td></tr>
           </tbody>
         </table>
-        <p>The mouse wheel scrolls three times faster than usual in egui apps. Hold <kbd>Shift</kbd> to scroll a page at a time.</p>
+        <p>The mouse wheel scrolls the code 8 times faster than usual in egui apps, and the side bar 2.5 times faster. Hold <kbd>Shift</kbd> to scroll the code a page at a time.</p>
       </section>
 
       <section id="commands">
@@ -236,6 +261,7 @@ rubyscope                                         <span class="c"># the current 
             <tr><td>Index the project again, parsing every file</td><td><code>reindex</code></td></tr>
             <tr><td>Diff against branch…</td><td><code>diff_against_branch</code></td></tr>
             <tr><td>Go to changed file</td><td><code>go_to_changed_file</code></td></tr>
+            <tr><td>Switch branch…</td><td><code>switch_branch</code></td></tr>
           </tbody>
         </table>
         <p>"Open in editor" uses <code>omarchy-launch-editor</code> when it is on <code>PATH</code>. Otherwise it opens nvim in a terminal. On macOS it opens nvim in a new Terminal window. "Open on GitHub" needs an <code>origin</code> remote on github.com and opens the line at the commit of <code>HEAD</code>.</p>
@@ -256,6 +282,7 @@ reindex = "f5"</code></pre>
           <thead><tr><th scope="col">Name</th><th scope="col">Default</th></tr></thead>
           <tbody>
             <tr><td><code>open_folder</code></td><td><kbd>Ctrl</kbd> <kbd>O</kbd></td></tr>
+            <tr><td><code>close_project</code></td><td><kbd>Ctrl</kbd> <kbd>Q</kbd></td></tr>
             <tr><td><code>go_to_file</code></td><td><kbd>Ctrl</kbd> <kbd>P</kbd></td></tr>
             <tr><td><code>go_to_symbol</code></td><td><kbd>Ctrl</kbd> <kbd>T</kbd></td></tr>
             <tr><td><code>search_project</code></td><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></td></tr>
@@ -290,7 +317,42 @@ reindex = "f5"</code></pre>
         </table>
         <p>The branch diff starts at the merge-base of the base branch and <code>HEAD</code>, so new commits on the base branch are not shown. The diff bar in the top bar says what is compared, for example <code>Diff: main…feature/order-refunds +77 −3, 3 uncommitted</code>. Click it, or choose "Diff against branch…" in <kbd>Ctrl</kbd> <kbd>K</kbd>, to pick another base from the local and remote branches. Rubyscope remembers the choice for each project.</p>
         <p><kbd>]</kbd> and <kbd>[</kbd> go from change to change. At the last change, <kbd>]</kbd> says so; press it again to open the next changed file. The marks on the right edge show where the changes are; click one to go there. The file tree and the tabs mark changed files (a green A, a blue M, an amber dot for changes that are not committed). In <kbd>Ctrl</kbd> <kbd>P</kbd>, <kbd>Tab</kbd> switches to the changed files, and the "Changes" tab of the side bar lists them with their counts. Blame works in diff mode too: lines that are not committed say so in amber.</p>
+        <p>When diff mode turns on, the file tree opens the folders that hold changed files, so you see them at once.</p>
         <p>The diffs are made again when an open file changes on disk and when <code>HEAD</code> or the base branch moves.</p>
+        <figure class="shot">
+          <img src="../img/shots/diff.webp" width="2560" height="1520" loading="lazy"
+               alt="order.rb in diff mode, with green added lines, a red removed row, an amber line that is not committed, and marks on the right edge.">
+          <figcaption>Diff mode. The frame and the chip show the current change, and the file tree marks <code>order.rb</code> and <code>refund.rb</code>.</figcaption>
+        </figure>
+      </section>
+
+      <section id="branches">
+        <h2>Pull and switch branches</h2>
+        <p>The round arrow in the top bar runs <code>git pull</code> for the branch that is checked out, in the background. It follows your <code>pull.rebase</code> setting and merges when there is none. A message says how many commits came in. When the pull stops on conflicts, Rubyscope fixes and aborts nothing: the message names the files, and you fix them in git or run <code>git merge --abort</code>. When git refuses, the message shows why.</p>
+        <p>The button with the branch name opens a list of branches. "Switch branch…" in <kbd>Ctrl</kbd> <kbd>K</kbd> opens it too. The branch with the newest commit is first. The list has the local branches and the remote branches with no local branch of that name. Next to each branch are the initials of the author of its open pull request, from <code>gh</code>. A branch with no pull request shows the initials of the author of its last commit, dimmed.</p>
+        <p>Picking a branch runs <code>git switch</code>. A remote branch gets a local branch that tracks it. Changes that are not committed stay; when the switch would lose them, git refuses and the message says why. After a switch, the open files are read again and the project is indexed again. The button also follows a switch made outside Rubyscope, within a few seconds.</p>
+        <figure class="shot">
+          <img src="../img/shots/branches.webp" width="2100" height="470" loading="lazy"
+               alt="The branch list under the branch button, with three branches and the initials of their authors.">
+          <figcaption>The branch list. Dim initials are the author of the last commit.</figcaption>
+        </figure>
+      </section>
+
+      <section id="mode">
+        <h2>Dark and light mode</h2>
+        <p>Rubyscope starts dark. The sun button at the right end of the top bar, or at the top right of the start screen, switches to light mode; the moon switches back. Rubyscope keeps the choice for the next start.</p>
+        <p>On Omarchy, Rubyscope uses the colors of the current theme when the theme is of the chosen mode. Otherwise it uses Tokyo Night in dark mode and Tokyo Night Day in light mode.</p>
+        <figure class="shot">
+          <img src="../img/shots/light.webp" width="2560" height="1520" loading="lazy"
+               alt="Rubyscope in light mode, with a hover popup and the usages panel.">
+          <figcaption>Light mode, with Tokyo Night Day colors.</figcaption>
+        </figure>
+      </section>
+
+      <section id="quit">
+        <h2>Close and quit</h2>
+        <p><kbd>Ctrl</kbd> <kbd>Q</kbd> closes the project and goes back to the project list. On the project list, it quits.</p>
+        <p>When you close the window, Rubyscope first saves the open tabs, stops the file watcher, and waits for an index save, a pull or a branch switch that is still running. When that takes longer than a moment, a dialog shows the step and a progress bar. Close the window again to quit at once. After 10 seconds Rubyscope quits anyway.</p>
       </section>
 
       <section id="clicks">
@@ -346,6 +408,7 @@ reindex = "f5"</code></pre>
             <tr><td><code>~/.local/state/rubyscope/recent.json</code></td><td>The projects of the start screen, in your order, with the names you gave them</td></tr>
             <tr><td><code>~/.local/state/rubyscope/session*.json</code></td><td>The open tabs of each project</td></tr>
             <tr><td><code>~/.local/state/rubyscope/diff*.json</code></td><td>The base branch of diff mode for each project</td></tr>
+            <tr><td><code>~/.local/state/rubyscope/mode</code></td><td>Dark or light mode</td></tr>
           </tbody>
         </table>
         <p>It reads <code>~/.config/rubyscope/keys.toml</code> for keys and the current Omarchy theme for colors.</p>

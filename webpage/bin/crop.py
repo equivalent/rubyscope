@@ -32,6 +32,10 @@ CROPS = {
     "go-to-file": (518, 110, 2080, 330),
     "splash": FULL,
     "diff": FULL,
+    "light": FULL,
+    "start-screen": (620, 40, 1940, 1040),
+    "top-bar": (0, 0, 2560, 64),
+    "branches": (0, 0, 2100, 470),
 }
 
 
