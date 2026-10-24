@@ -13,6 +13,7 @@ mod external;
 mod git;
 mod highlight;
 mod keys;
+mod memory;
 mod picker;
 #[cfg(test)]
 mod shots;

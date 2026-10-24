@@ -14,6 +14,7 @@ use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
 use crate::git::Pull;
 use crate::keys::{self, Action, Keymap};
+use crate::memory::{self, Memory};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
 use crate::theme::Theme;
 use crate::tree::{self, FileTree};
@@ -83,6 +84,10 @@ pub struct App {
     pub(crate) worker: Worker,
     pub index: Option<Arc<Index>>,
     index_status: String,
+    /// The last index: Ruby files, of them in the project, and seconds.
+    /// Shown when `index_status` is empty.
+    indexed: Option<(usize, usize, f64)>,
+    memory: Memory,
     tree: FileTree,
     all_files: Arc<Vec<String>>,
     pub tabs: Vec<OpenFile>,
@@ -166,6 +171,33 @@ fn go_to_change(t: &mut OpenFile, c: usize) {
     t.change = Some(c);
     t.scroll_to_row = Some((first, 1.0 / 3.0));
     t.cursor = Some(t.line_start(t.line_of_row(first)));
+}
+
+/// A small square button with a folder, drawn like the pull button. Its
+/// name for screen readers and tests is "Go to file".
+fn folder_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
+    let side = ui.spacing().interact_size.y;
+    let r = ui.add(egui::Button::new("").min_size(egui::vec2(side, side)));
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Go to file"));
+    let color = if r.hovered() { theme.fg_bright } else { theme.fg };
+    let stroke = egui::Stroke::new(1.5, color);
+    let c = r.rect.center();
+    let (w, h) = (side * 0.58, side * 0.42);
+    let (left, top) = (c.x - w / 2.0, c.y - h / 2.0 + side * 0.03);
+    let (right, bottom) = (left + w, top + h);
+    // The tab on top, then the body, as one outline.
+    let tab_end = left + w * 0.42;
+    let tab_top = top - side * 0.1;
+    let points = vec![
+        Pos2::new(left, bottom),
+        Pos2::new(left, tab_top),
+        Pos2::new(tab_end - side * 0.06, tab_top),
+        Pos2::new(tab_end, top),
+        Pos2::new(right, top),
+        Pos2::new(right, bottom),
+    ];
+    ui.painter().add(egui::Shape::closed_line(points, stroke));
+    r
 }
 
 /// A small square button with a circular arrow. No font of the app has a
@@ -335,6 +367,8 @@ impl App {
             worker: Worker::new(ctx.clone()),
             index: None,
             index_status: String::new(),
+            indexed: None,
+            memory: Memory::new(),
             tree: FileTree::default(),
             all_files: Arc::new(Vec::new()),
             tabs: Vec::new(),
@@ -422,6 +456,7 @@ impl App {
         self.root = None;
         self.index = None;
         self.index_status.clear();
+        self.indexed = None;
         self.tree = FileTree::default();
         self.all_files = Arc::new(Vec::new());
         self.tabs.clear();
@@ -958,6 +993,17 @@ impl App {
         format!("Go to changed file (vs {})", self.repo.as_ref().map(|r| r.base.as_str()).unwrap_or("…"))
     }
 
+    fn toggle_blame(&mut self) {
+        self.show_blame = !self.show_blame;
+        if self.show_blame
+            && let (Some(root), Some(t)) = (self.root.clone(), self.tabs.get_mut(self.active))
+            && !t.blame_requested
+        {
+            t.blame_requested = true;
+            self.worker.blame(root, t.path.clone(), t.rel.clone());
+        }
+    }
+
     /// Go to file; in diff mode Tab shows the changed files.
     fn open_file_picker(&mut self, changed: bool) {
         let items = self.file_items();
@@ -1364,16 +1410,7 @@ impl App {
                     self.show_bottom = false;
                 }
             }
-            Action::ToggleBlame => {
-                self.show_blame = !self.show_blame;
-                if self.show_blame
-                    && let (Some(root), Some(t)) = (self.root.clone(), self.tabs.get_mut(self.active))
-                    && !t.blame_requested
-                {
-                    t.blame_requested = true;
-                    self.worker.blame(root, t.path.clone(), t.rel.clone());
-                }
-            }
+            Action::ToggleBlame => self.toggle_blame(),
             Action::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             Action::ToggleBottomPanel => self.show_bottom = !self.show_bottom,
             Action::Back => self.go_back(),
@@ -1421,7 +1458,8 @@ impl App {
             match msg {
                 Msg::Indexed { index, took } => {
                     let s = &index.stats;
-                    self.index_status = format!("{} files · {:.1} s", s.files, took.as_secs_f64());
+                    self.index_status.clear();
+                    self.indexed = Some((s.files, s.project_files, took.as_secs_f64()));
                     self.all_files = Arc::new(index.all_files.clone());
                     self.file_items = None;
                     self.symbol_items = None;
@@ -1638,6 +1676,12 @@ impl App {
         let theme = self.theme.clone();
         egui::Panel::top("toolbar").frame(egui::Frame::NONE.fill(theme.bg_dark).inner_margin(6.0)).show(ui, |ui| {
             ui.horizontal(|ui| {
+                if self.root.is_some() {
+                    let key = self.keys.shortcut(Action::GoToFile).map(|s| s.label()).unwrap_or_default();
+                    if folder_button(ui, &theme).on_hover_text(format!("Go to file ({key})")).clicked() {
+                        self.open_file_picker(false);
+                    }
+                }
                 let back = ui
                     .add_enabled(self.history_pos > 0, egui::Button::new("←"))
                     .on_hover_text("Back (mouse back button)");
@@ -1679,7 +1723,7 @@ impl App {
                         self.picker = Some(Picker::new(PickerKind::Commands, self.command_items()));
                     }
                     if self.root.is_some() {
-                        // Right to left: pull, the branch, Diff.
+                        // Right to left: pull, the branch, Blame, Diff.
                         if self.pulling {
                             ui.spinner().on_hover_text("Pulling…");
                         } else if pull_button(ui, &theme)
@@ -1700,6 +1744,16 @@ impl App {
                                 self.open_switch_picker();
                             }
                         }
+                        let key = self.keys.shortcut(Action::ToggleBlame).map(|s| s.label()).unwrap_or_default();
+                        let hint = if self.show_blame { "Hide git blame" } else { "Show git blame" };
+                        let button = if self.show_blame {
+                            egui::Button::new(RichText::new("Blame").color(theme.bg_dark).strong()).fill(theme.accent)
+                        } else {
+                            egui::Button::new("Blame")
+                        };
+                        if ui.add(button).on_hover_text(format!("{hint} ({key})")).clicked() {
+                            self.toggle_blame();
+                        }
                         let key = self.keys.shortcut(Action::ToggleDiff).map(|s| s.label()).unwrap_or_default();
                         let hint = if self.show_diff { "Hide the diff" } else { "Show the diff" };
                         let button = if self.show_diff {
@@ -1715,12 +1769,42 @@ impl App {
                     if busy {
                         ui.spinner();
                     }
-                    ui.label(RichText::new(&self.index_status).color(theme.fg_dim).small());
+                    self.status_numbers(ui);
                     if self.show_diff && self.diff_pill(ui) {
                         self.open_branch_picker();
                     }
                 });
             });
+        });
+    }
+
+    /// The index and memory numbers, each with its meaning on hover. The
+    /// layout is right to left, so the last number comes first.
+    fn status_numbers(&mut self, ui: &mut egui::Ui) {
+        let dim = self.theme.fg_dim;
+        let small = |text: String| RichText::new(text).color(dim).small();
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            if !self.index_status.is_empty() {
+                ui.label(small(self.index_status.clone()));
+            } else if let Some((files, project, secs)) = self.indexed {
+                ui.label(small(format!("{secs:.1} s"))).on_hover_text(format!(
+                    "The last index took {secs:.1} seconds. It is built again when files change."
+                ));
+                ui.label(small("·".into()));
+                ui.label(small(format!("{files} files"))).on_hover_text(format!(
+                    "{files} Ruby files are indexed: {project} from this project, {} from gems and the Ruby \
+                     standard library.",
+                    files - project
+                ));
+            }
+            if let Some(bytes) = self.memory.bytes() {
+                let text = memory::label(bytes);
+                ui.label(small("·".into()));
+                ui.label(small(text.clone())).on_hover_text(format!(
+                    "rubyscope uses {text} of RAM now: the resident memory of this process, read every 2 seconds."
+                ));
+            }
         });
     }
 

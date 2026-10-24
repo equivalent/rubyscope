@@ -1645,3 +1645,37 @@ fn closing_again_quits_without_waiting() {
     ask_to_close(&mut h);
     assert!(h.state().quit);
 }
+
+#[test]
+fn the_blame_button_shows_and_hides_blame() {
+    let root = diff_fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/order.rb");
+    h.get_by_label("Blame").click();
+    h.run();
+    assert!(h.state().show_blame);
+    // The button and the key work together.
+    press(&mut h, CMD, Key::B);
+    assert!(!h.state().show_blame);
+    h.get_by_label("Blame").click();
+    h.run();
+    assert!(h.state().show_blame);
+    for _ in 0..200 {
+        std::thread::sleep(Duration::from_millis(25));
+        let _ = h.run_ok();
+        if h.state().current().is_some_and(|t| t.blame.is_some()) {
+            break;
+        }
+    }
+    shot(&mut h, "52-blame-button");
+}
+
+#[test]
+fn the_folder_button_opens_go_to_file() {
+    let root = fixture();
+    let mut h = harness(&root);
+    h.get_by_label("Go to file").click();
+    h.run();
+    assert_eq!(h.state().picker.as_ref().map(|p| p.kind), Some(crate::picker::PickerKind::Files));
+    shot(&mut h, "53-folder-button");
+}
