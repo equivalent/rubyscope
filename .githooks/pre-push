@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Runs bin/ci before a push to main and stops the push when it fails.
+# Pushes to other branches are not checked here. AGENTS.md asks agents to run
+# bin/ci before those too.
+# Turn it on in a clone with: git config core.hooksPath .githooks
+set -euo pipefail
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "Push to main: running bin/ci first"
+    exec "$(git rev-parse --show-toplevel)/bin/ci"
+  fi
+done

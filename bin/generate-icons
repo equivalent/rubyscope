@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Rebuild raster icons from the SVG masters. Requires librsvg and ImageMagick.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+for mode in dark light; do
+  rsvg-convert -w 512 -h 512 "packaging/icon/rubyscope-$mode.svg" -o "packaging/icon/rubyscope-$mode.png"
+done
+for size in 16 32 48 64 128 256 512; do
+  rsvg-convert -w "$size" -h "$size" packaging/icon/rubyscope.svg -o "packaging/icon/rubyscope-$size.png"
+done
+magick packaging/icon/rubyscope-512.png -define icon:auto-resize=256,128,64,48,32,16 favicon.ico
+cp favicon.ico webpage/favicon.ico
+cp packaging/icon/rubyscope.svg favicon.svg
+cp packaging/icon/rubyscope-dark.svg webpage/img/icon.svg
+cp packaging/icon/rubyscope-32.png webpage/img/icon-32.png

@@ -30,6 +30,11 @@ Rules:
 
 - Run `bin/ci` before each push to any branch. Push only when it ends with
   `bin/ci passed`.
+- A push to `main` runs `bin/ci` by itself, through the pre-push hook in
+  `.githooks/pre-push`, and stops when it fails. Pushes to other branches
+  have no hook, so run `bin/ci` yourself. Never skip the hook with
+  `--no-verify`.
+- A new clone turns the hook on with `git config core.hooksPath .githooks`.
 - When a step fails, fix the cause and run `bin/ci` again. Do not skip a
   step, and do not remove or weaken a test to make it pass.
 - If a failure is not caused by your change, stop and tell the user. Do not
