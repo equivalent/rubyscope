@@ -51,6 +51,16 @@ impl FileTree {
         self.reveal = Some(rel.to_string());
     }
 
+    /// Opens the folders of these files, without scrolling.
+    pub fn open_folders_of<'a>(&mut self, rels: impl IntoIterator<Item = &'a String>) {
+        for rel in rels {
+            let parts: Vec<&str> = rel.split('/').collect();
+            for i in 1..parts.len() {
+                self.open.insert(parts[..i].join("/"));
+            }
+        }
+    }
+
     /// Draws the tree. Returns the file that was clicked. `project` is the
     /// project folder, for "Copy full path" in the right-click menu. In diff
     /// mode, `marks` has the changed files: A or M for the branch, an amber

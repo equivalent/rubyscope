@@ -1004,6 +1004,20 @@ fn toast_text(h: &Harness<'static, App>) -> String {
 }
 
 #[test]
+fn diff_mode_opens_the_folders_of_the_changed_files() {
+    let root = diff_fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "Gemfile");
+    assert!(!h.state().open_folders().contains("app/models"));
+    press(&mut h, CMD | Modifiers::SHIFT, Key::D);
+    wait_for_diff(&mut h);
+    let open = h.state().open_folders();
+    for dir in ["app", "app/models", "app/services"] {
+        assert!(open.contains(dir), "{dir} not open: {open:?}");
+    }
+}
+
+#[test]
 fn diff_mode_shows_the_branch_and_what_is_not_committed() {
     let root = diff_fixture();
     let mut h = harness(&root);

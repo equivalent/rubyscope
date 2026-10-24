@@ -662,6 +662,12 @@ impl App {
         }
     }
 
+    /// The open folders of the file tree (tests).
+    #[cfg(test)]
+    pub fn open_folders(&self) -> &std::collections::HashSet<String> {
+        &self.tree.open
+    }
+
     /// The message at the bottom, if one shows (tests).
     #[cfg(test)]
     pub fn toast_text(&self) -> Option<String> {
@@ -1101,6 +1107,8 @@ impl App {
         self.repo = Some(st.clone());
         if self.announce_diff {
             self.announce_diff = false;
+            // Diff mode just turned on: open the folders of the changed files.
+            self.tree.open_folders_of(self.diff_marks.keys());
             let msg = match (&st.error, st.base_missing) {
                 (Some(e), _) => format!("Diff mode needs git: this project is {e}"),
                 (None, true) if st.base.is_empty() => {
