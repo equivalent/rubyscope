@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Builds the release files for a GitHub release, for the OS it runs on:
+#   Linux: dist/rubyscope-<version>-linux-<arch>.tar.gz
+#          (both binaries, the launcher entry, the icons and install.sh)
+#   macOS: dist/Rubyscope-<version>-macos-<arch>.dmg
+#          (Rubyscope.app, rubyscope-cli and a link to Applications)
+#
+# The binaries are stripped, and the build folders are renamed inside them
+# (--remap-path-prefix), so no path from this machine is in a binary. The
+# script fails when $HOME is still in one.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+arch=$(uname -m)
+os=$(uname -s)
+dist="$PWD/dist"
+mkdir -p "$dist"
+
+export CARGO_TARGET_DIR="$PWD/target/package"
+export CARGO_PROFILE_RELEASE_DEBUG=0
+export CARGO_PROFILE_RELEASE_STRIP=symbols
+export RUSTFLAGS="--remap-path-prefix=$PWD=rubyscope --remap-path-prefix=$HOME=~"
+# The Ruby parser (ruby-prism-sys) is C code; rename its paths too.
+export CFLAGS="${CFLAGS:-} -ffile-prefix-map=$PWD=rubyscope -ffile-prefix-map=$HOME=~"
+cargo build --release --locked -p rubyscope -p rubyscope-cli
+bin_dir="$CARGO_TARGET_DIR/release"
+
+for b in rubyscope rubyscope-cli; do
+  if LC_ALL=C grep -a -q -F "$HOME" "$bin_dir/$b"; then
+    echo "package failed: $b holds a path from $HOME" >&2
+    exit 1
+  fi
+done
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+
+case "$os" in
+Linux)
+  name="rubyscope-$version-linux-$arch"
+  root="$stage/$name"
+  mkdir -p "$root/icons"
+  install -m755 "$bin_dir/rubyscope" "$bin_dir/rubyscope-cli" "$root/"
+  cp packaging/rubyscope.desktop "$root/"
+  cp packaging/icon/rubyscope.svg packaging/icon/rubyscope-{16,32,48,64,128,256,512}.png "$root/icons/"
+  cp packaging/linux/install.sh "$root/"
+  chmod 755 "$root/install.sh"
+  tar -C "$stage" -czf "$dist/$name.tar.gz" "$name"
+  echo "$dist/$name.tar.gz"
+  ;;
+Darwin)
+  name="Rubyscope-$version-macos-$arch"
+  root="$stage/$name"
+  mkdir -p "$root"
+  bin/macos-app "$bin_dir/rubyscope" "$root/Rubyscope.app"
+  install -m755 "$bin_dir/rubyscope-cli" "$root/"
+  ln -s /Applications "$root/Applications"
+  rm -f "$dist/$name.dmg"
+  hdiutil create -quiet -volname "Rubyscope $version" -srcfolder "$root" -format UDZO "$dist/$name.dmg"
+  echo "$dist/$name.dmg"
+  ;;
+*)
+  echo "package: $os is not supported" >&2
+  exit 1
+  ;;
+esac

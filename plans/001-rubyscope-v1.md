@@ -447,8 +447,7 @@ Each step ends with something that works.
 
 ## Status (2026-10-20)
 
-All six steps are built. Checked on a large private Rails app (about
-7,000 Ruby files, 340 gems).
+All six steps are built. Checked on a large private Rails app.
 
 | Check | Result |
 |---|---|

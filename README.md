@@ -37,6 +37,39 @@ the end tells what is done.
 | `xdg-open` | Linux: opens links in the browser. macOS uses `open`. |
 | Omarchy | Colors from the current Omarchy theme, when it is of the mode you chose (dark or light). Otherwise the colors are Tokyo Night or Tokyo Night Day. |
 
+## Install from a release
+
+Each GitHub release has a Linux build and a macOS build. This is alpha
+software: the first release is 0.0.1.
+
+Linux (x86_64, built on Arch Linux):
+
+```
+tar xzf rubyscope-0.0.1-linux-x86_64.tar.gz
+rubyscope-0.0.1-linux-x86_64/install.sh
+```
+
+`install.sh` copies the files listed under "Build and install" below.
+Make sure `~/.local/bin` is on your `PATH`.
+
+macOS (Apple silicon): open `Rubyscope-0.0.1-macos-arm64.dmg` and drag
+Rubyscope to Applications. The app is not signed, so macOS blocks the
+first start. Run this once:
+
+```
+xattr -dr com.apple.quarantine /Applications/Rubyscope.app
+```
+
+For the terminal command, link the binary in the app, and copy
+`rubyscope-cli` from the DMG:
+
+```
+ln -sf /Applications/Rubyscope.app/Contents/MacOS/rubyscope ~/.local/bin/rubyscope
+```
+
+To make the release files, run `bin/package` on each OS. It writes them
+to `dist/`.
+
 ## Build and install
 
 ```
@@ -476,9 +509,8 @@ into memory and does not read all of it. The references of a file are read
 from it only when a click or "find usages" needs them.
 
 At the next start Rubyscope parses only the files whose size or change
-time is different. Then it links everything again. For a large app (about
-7,000 Ruby files and 340 gems) the index is ready in less than 1 s with
-the saved index, and in about 2.3 s without it.
+time is different. Then it links everything again. For a large Rails app the index is ready in less than 1 s with the saved
+index, and in about 2.3 s without it.
 
 Rubyscope does not use the saved index when:
 

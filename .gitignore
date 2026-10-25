@@ -1,4 +1,5 @@
 /target
+/dist
 # Real click points and probe output from private projects stay outside the repo.
 /tests/golden/
 probe.json

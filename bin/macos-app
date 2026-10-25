@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Makes Rubyscope.app from a built binary: bin/macos-app <binary> <path of the .app>
+# Used by bin/install-macos and bin/package. Needs macOS (iconutil, plutil).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+binary=$1
+app=$2
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+cp packaging/macos/Info.plist "$app/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$version" "$app/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$version" "$app/Contents/Info.plist"
+cp "$binary" "$app/Contents/MacOS/rubyscope"
+
+# The icon: an .icns made from the PNG sizes in packaging/icon.
+tmp=$(mktemp -d)
+iconset="$tmp/rubyscope.iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+  cp "packaging/icon/rubyscope-$size.png" "$iconset/icon_${size}x${size}.png"
+done
+cp packaging/icon/rubyscope-32.png "$iconset/icon_16x16@2x.png"
+cp packaging/icon/rubyscope-64.png "$iconset/icon_32x32@2x.png"
+cp packaging/icon/rubyscope-256.png "$iconset/icon_128x128@2x.png"
+cp packaging/icon/rubyscope-512.png "$iconset/icon_256x256@2x.png"
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/rubyscope.icns"
+rm -rf "$tmp"
+touch "$app"

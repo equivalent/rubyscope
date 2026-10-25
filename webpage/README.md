@@ -26,7 +26,7 @@ Any static host works: serve the `webpage` folder as the site root.
 
 ## Deploy
 
-https://rubyscope.equivalent.work, with Kamal 2, from `t@len` only. The page
+https://rubyscope.equivalent.work, with Kamal 2, from Linux only. The page
 is the `rubyscope-site` service: nginx serves the files, and kamal-proxy
 routes `rubyscope.equivalent.work` to it. The proxy is shared with other
 apps on the server, so never `kamal proxy reboot` it.

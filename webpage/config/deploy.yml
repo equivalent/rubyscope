@@ -1,5 +1,5 @@
 # The web page, deployed with Kamal 2. nginx serves the static files. Deploy
-# from t@len only, never from macOS. See "Deploy" in README.md.
+# from Linux only, never from macOS. See "Deploy" in README.md.
 service: rubyscope-site
 image: rubyscope-site
 

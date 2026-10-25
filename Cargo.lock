@@ -3142,7 +3142,7 @@ dependencies = [
 
 [[package]]
 name = "rubyscope"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3163,7 +3163,7 @@ dependencies = [
 
 [[package]]
 name = "rubyscope-cli"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -3174,7 +3174,7 @@ dependencies = [
 
 [[package]]
 name = "rubyscope-index"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "ignore",
