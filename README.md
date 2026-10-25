@@ -68,7 +68,10 @@ ln -sf /Applications/Rubyscope.app/Contents/MacOS/rubyscope ~/.local/bin/rubysco
 ```
 
 To make the release files, run `bin/package` on each OS. It writes them
-to `dist/`.
+to `dist/`. `bin/release <version>` does a whole release: it scans the
+history and the binaries for private names and secrets, sets the version,
+builds on Linux and on a Mac over ssh, tags the version and makes the
+GitHub release. Read the top of the script for what it needs.
 
 ## Build and install
 
@@ -676,6 +679,8 @@ RUBYSCOPE_PROJECT=~/code/shop cargo test -p rubyscope real_project_smoke -- --no
 | `probe/rails_probe.rb` | The script that gets real locations from booted Rails |
 | `plans/001-rubyscope-v1.md` | The design plan, with its status at the end |
 | `bin/install` | Builds and installs Rubyscope for this user |
+| `bin/package` | Builds the release file for this OS in `dist/` |
+| `bin/release` | Makes a GitHub release for Linux and macOS |
 | `bin/ci` | Runs every check before a push: formatting, clippy, tests, private paths |
 | `packaging/rubyscope.desktop` | The app launcher entry |
 | `webpage/` | The web page and the docs, plain HTML and CSS (see `webpage/README.md`) |
