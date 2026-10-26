@@ -17,7 +17,7 @@ It installs `~/.local/bin/rubyscope`, `~/.local/bin/rubyscope-cli`, the launcher
 xattr -dr com.apple.quarantine /Applications/Rubyscope.app
 ```
 
-For the terminal command:
+For the terminal command, link the binary in the app, and copy `rubyscope-cli` from the DMG to `~/.local/bin`:
 
 ```
 ln -sf /Applications/Rubyscope.app/Contents/MacOS/rubyscope ~/.local/bin/rubyscope

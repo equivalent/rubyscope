@@ -40,19 +40,20 @@ the end tells what is done.
 ## Install from a release
 
 Each GitHub release has a Linux build and a macOS build. This is alpha
-software: the first release is 0.0.1.
+software, so the versions start at 0.0.1. Below, `<version>` is the
+number of the release, for example `0.0.1`.
 
 Linux (x86_64, built on Arch Linux):
 
 ```
-tar xzf rubyscope-0.0.1-linux-x86_64.tar.gz
-rubyscope-0.0.1-linux-x86_64/install.sh
+tar xzf rubyscope-<version>-linux-x86_64.tar.gz
+rubyscope-<version>-linux-x86_64/install.sh
 ```
 
 `install.sh` copies the files listed under "Build and install" below.
 Make sure `~/.local/bin` is on your `PATH`.
 
-macOS (Apple silicon): open `Rubyscope-0.0.1-macos-arm64.dmg` and drag
+macOS (Apple silicon): open `Rubyscope-<version>-macos-arm64.dmg` and drag
 Rubyscope to Applications. The app is not signed, so macOS blocks the
 first start. Run this once:
 

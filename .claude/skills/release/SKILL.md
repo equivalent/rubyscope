@@ -42,10 +42,26 @@ RUBYSCOPE_MAC_HOST=<user@mac> bin/release <version>
 Run it in the background with a long timeout; a clean build takes about
 10 minutes. It stops at the first failed step and says which.
 
-If it stops after the "Release <version>" commit was pushed, fix the cause
-and run it again with the same version. The commit step is skipped when the
-version is already set. If the tag exists but the GitHub release does not,
-run only the `gh release create` line at the end of the script by hand.
+It stops at the first failed step. What to do before a rerun with the same
+version:
+
+- **bin/ci failed in the pre-push hook.** The "Release <version>" commit is
+  on local main, not pushed. Fix the cause in a new commit on main, run
+  `bin/ci`, push main, then rerun. A rerun with only the release commit
+  unpushed also works: the checks allow that one commit.
+- **`cargo update` failed.** `git checkout Cargo.toml Cargo.lock`, then rerun.
+- **A scan found something.** Fix it in a commit on main and push. A hit in
+  history before the last tag is for the user to decide (rewrite or keep).
+- **The tag was made but not pushed.** `git tag -d v<version>`, then rerun.
+- **The tag is on GitHub but the release is not.** Do not rerun. Make the
+  release by hand with the notes the script wrote:
+  `gh release create v<version> --prerelease --verify-tag --title "Rubyscope <version>" --notes-file dist/release-notes-<version>.md <the two files in dist/>`
+
+A failed Mac build leaves its folder in `~/tmp` on the Mac, for debugging.
+The next run of the same version replaces it.
+
+Before the repo goes public, run one release with `RUBYSCOPE_SCAN_ALL=1`,
+which scans the whole history and not only the commits since the last tag.
 
 ## After
 
