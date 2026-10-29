@@ -123,6 +123,16 @@ fn class_method_calls_use_the_singleton_side() {
 }
 
 #[test]
+fn self_class_calls_go_to_the_class_method() {
+    let p = Project::new(&[(
+        "a.rb",
+        "class Notice\n  def self.messages(x) = []\n  def messages; end\n  def run\n    self.class.messages(1)\n    div do\n      self.class.messages(2)\n    end\n  end\nend\n",
+    )]);
+    assert_eq!(p.click("a.rb", "messages(1)", 0), vec!["Notice.messages @ a.rb:2"]);
+    assert_eq!(p.click("a.rb", "messages(2)", 0), vec!["Notice.messages @ a.rb:2"]);
+}
+
+#[test]
 fn new_goes_to_initialize() {
     let p = Project::new(&[
         ("a.rb", "class Base\n  def initialize(x); end\nend\nclass Child < Base; end\n"),

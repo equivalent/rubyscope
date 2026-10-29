@@ -450,6 +450,9 @@ impl Index {
             return None;
         }
         // An instance.
+        if name == "class" {
+            return Some((Ty { class: recv.class.clone(), singleton: true, many: false }, Confidence::Exact));
+        }
         if let Some(assoc) = self.association(&recv.class, name) {
             let class = self.association_class(&recv.class, assoc)?;
             let ty = if assoc.kind.is_collection() { Ty::many(class) } else { Ty::instance(class) };
