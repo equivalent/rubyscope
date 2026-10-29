@@ -509,6 +509,19 @@ pub fn default_base(root: &Path) -> Option<String> {
 /// Everything diff mode needs to know about the repository. `base` is the
 /// branch the user chose, or none for the default.
 pub fn repo_status(root: &Path, base: Option<&str>) -> RepoStatus {
+    // A commit that lands while the status is read gives the old HEAD with
+    // the new file list, and the open diffs would never be made again. So
+    // read again when HEAD moved meanwhile.
+    for _ in 0..3 {
+        let st = repo_status_once(root, base);
+        if st.head == git_line(root, &["rev-parse", "-q", "--verify", "HEAD"]) {
+            return st;
+        }
+    }
+    repo_status_once(root, base)
+}
+
+fn repo_status_once(root: &Path, base: Option<&str>) -> RepoStatus {
     let mut st = RepoStatus::default();
     if git_line(root, &["rev-parse", "--is-inside-work-tree"]).as_deref() != Some("true") {
         st.error = Some("not a git repository".into());
