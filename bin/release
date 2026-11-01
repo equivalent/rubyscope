@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Makes a GitHub release: bin/release <version>    (for example 0.0.2)
+#
+# Run it on Linux, on a clean main that matches origin. It needs:
+#   RUBYSCOPE_MAC_HOST     an ssh host (user@name) of a Mac with Rust,
+#                          which builds the DMG
+#   a private words file   one extended regex per line: names of private
+#                          projects, machines, people. Not in the repo. At
+#                          ~/.config/rubyscope/private-words, or the path in
+#                          RUBYSCOPE_PRIVATE_WORDS.
+#   RUBYSCOPE_SCAN_ALL=1   optional: scan the whole history, not only the
+#                          commits since the last release tag
+#
+# Steps, each stops the release when it fails:
+#   1. checks: version higher than the last tag, branch, clean tree, tag
+#      not taken, the words file is a valid pattern
+#   2. scans the commits since the last tag on every pushed branch, tag and
+#      pull request (all commits when there is no tag yet, or with
+#      RUBYSCOPE_SCAN_ALL=1) for the private words and for secrets
+#   3. sets the version in Cargo.toml (bin/macos-app copies it into the
+#      app), commits "Release <version>", pushes main (the pre-push hook
+#      runs bin/ci)
+#   4. bin/package here (Linux tar.gz) and on the Mac (DMG). Both builds'
+#      binaries are scanned here, with the same scan as step 2.
+#   5. tags v<version> and makes a GitHub pre-release with both files. The
+#      notes are in dist/release-notes-<version>.md.
+#
+# A scan that cannot run (a bad pattern, a lost ssh connection) stops the
+# release; it never counts as clean.
+#
+# Screenshots are pictures, so the text scan cannot read them. Look at the
+# changed ones yourself before a release (see the release skill).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+version=${1:-}
+mac=${RUBYSCOPE_MAC_HOST:-}
+words_file=${RUBYSCOPE_PRIVATE_WORDS:-$HOME/.config/rubyscope/private-words}
+tag="v$version"
+notes="dist/release-notes-$version.md"
+
+step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
+fail() { printf '\n\033[1;31mbin/release failed: %s\033[0m\n' "$1" >&2; exit 1; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+step "Checks"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "give a version such as 0.0.2"
+[ -n "$mac" ] || fail "set RUBYSCOPE_MAC_HOST to the ssh host of a Mac"
+[ -s "$words_file" ] || fail "no private words file at $words_file"
+[ "$(uname -s)" = Linux ] || fail "run it on Linux"
+[ "$(git branch --show-current)" = main ] || fail "not on main"
+[ -z "$(git status --porcelain)" ] || fail "uncommitted changes (after a failed 'cargo update': git checkout Cargo.toml Cargo.lock)"
+# The pull request heads too: GitHub keeps them after a branch is deleted.
+git fetch -q --prune origin --tags '+refs/heads/*:refs/remotes/origin/*' '+refs/pull/*/head:refs/remotes/origin/pull/*'
+# Main may be one commit ahead: the "Release <version>" commit of a run whose push failed.
+ahead=$(git log --format=%s origin/main..HEAD)
+[ -z "$ahead" ] || [ "$ahead" = "Release $version" ] || fail "main is not the same as origin/main"
+git merge-base --is-ancestor origin/main HEAD || fail "main is behind origin/main"
+git ls-remote -q --exit-code --tags origin "refs/tags/$tag" >/dev/null && fail "tag $tag is on GitHub already"
+git rev-parse -q --verify "refs/tags/$tag" >/dev/null && fail "tag $tag is only here, never pushed. Remove it: git tag -d $tag"
+last_tag=$(git tag -l 'v*' --sort=-v:refname | head -1)
+if [ -n "$last_tag" ]; then
+  [ "$(printf '%s\n' "${last_tag#v}" "$version" | sort -V | tail -1)" = "$version" ] || fail "$version is not higher than $last_tag"
+fi
+ssh -o ConnectTimeout=10 "$mac" true || fail "cannot reach $mac"
+gh auth status >/dev/null 2>&1 || fail "gh is not logged in"
+
+# The words: no comments, blank lines, Windows line ends or trailing spaces.
+# An empty alternative ("a||b", a line that starts or ends with |) would
+# match every line, so it is refused.
+words=$(sed -e 's/\r$//' -e 's/[[:space:]]*$//' "$words_file" | grep -v -E '^[[:space:]]*(#|$)' | paste -sd '|' || true)
+[ -n "$words" ] || fail "the private words file has no words"
+case "|$words|" in *'||'*) fail "the private words file has an empty alternative (a stray |)" ;; esac
+secrets='BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]+|/home/[a-z0-9_-]+/|/Users/[A-Za-z0-9_-]+/|Co-Authored-By: *Claude|Generated with \[?Claude'
+pattern="$words|$secrets"
+rc=0
+printf '' | LC_ALL=C grep -a -i -E "$pattern" >/dev/null || rc=$?
+[ "$rc" -le 1 ] || fail "the private words file is not a valid extended regex"
+echo "OK"
+
+# Prints the lines of stdin that match a private word or a secret pattern.
+# grep gives 1 for "no match" and 2 for an error; an error stops the release.
+scan() {
+  local out rc=0
+  out=$(LC_ALL=C grep -a -n -i -E "$pattern") || rc=$?
+  [ "$rc" -le 1 ] || fail "the scan did not run (grep status $rc)"
+  printf '%s' "$out" | cut -c1-200
+}
+
+# Every pushed branch, tag and pull request (not local-only branches), with
+# author and committer, from the last release tag on.
+since=()
+[ -n "$last_tag" ] && [ -z "${RUBYSCOPE_SCAN_ALL:-}" ] && since=(--not "$last_tag")
+step "Scan of the git history since ${since[1]:-the first commit}"
+git log --remotes --tags "${since[@]}" -p --format='commit %H%nauthor %an <%ae>%ncommitter %cn <%ce>%n%B' > "$tmp/history"
+hits=$(scan < "$tmp/history")
+[ -z "$hits" ] || { echo "$hits" | head -40; fail "the history has the lines above"; }
+echo "OK"
+
+step "Set the version to $version and push main"
+sed -i "0,/^version = \".*\"/s//version = \"$version\"/" Cargo.toml
+cargo update -q --workspace
+git add Cargo.toml Cargo.lock
+git diff --cached --quiet || git commit -q -m "Release $version"
+git push origin main
+
+step "Linux build"
+linux_file=$(bin/package | tail -1)
+[ -f "$linux_file" ] || fail "bin/package made no Linux file"
+
+step "macOS build on $mac"
+remote_dir="tmp/rubyscope-release-$version"
+git archive --format=tar HEAD | ssh "$mac" "rm -rf ~/$remote_dir && mkdir -p ~/$remote_dir && tar -x -C ~/$remote_dir"
+mac_file=$(ssh "$mac" "export PATH=\"\$HOME/.cargo/bin:\$PATH\"; cd ~/$remote_dir && bin/package" | tail -1)
+scp -q "$mac:$mac_file" dist/
+mac_file="dist/$(basename "$mac_file")"
+[ -f "$mac_file" ] || fail "no DMG came back from $mac"
+# The binaries come back too, so they get the same scan as the Linux ones.
+mkdir -p "$tmp/mac"
+scp -q "$mac:$remote_dir/target/package/release/rubyscope" "$mac:$remote_dir/target/package/release/rubyscope-cli" "$tmp/mac/"
+
+step "Scan of the release binaries"
+tar -C "$tmp" -xzf "$linux_file"
+for f in "$tmp"/rubyscope-*/rubyscope "$tmp"/rubyscope-*/rubyscope-cli "$tmp/mac/rubyscope" "$tmp/mac/rubyscope-cli"; do
+  [ -f "$f" ] || fail "$f is missing"
+  hits=$(scan < "$f")
+  [ -z "$hits" ] || { echo "$hits" | head; fail "$f has the lines above"; }
+done
+ssh "$mac" "rm -rf ~/$remote_dir"
+echo "OK"
+
+step "Tag $tag and make the GitHub release"
+sed "s/{{VERSION}}/$version/g" packaging/release-notes.md > "$notes"
+git tag -a "$tag" -m "Rubyscope $version"
+git push -q origin "$tag"
+prerelease=()
+[[ "$version" == 0.* ]] && prerelease=(--prerelease)
+gh release create "$tag" "${prerelease[@]}" --verify-tag --title "Rubyscope $version" \
+  --notes-file "$notes" "$linux_file" "$mac_file"
+gh release view "$tag" --json url --jq .url
+
+printf '\n\033[1;32mbin/release done\033[0m\n'
