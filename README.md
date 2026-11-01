@@ -261,8 +261,11 @@ These keys scroll the code when no text field has focus:
 
 The mouse wheel scrolls the code 12 times faster than the egui default,
 the side bar 3.75 times faster, and every other list 1.5 times faster.
-Hold Ctrl (Cmd on macOS) to scroll 3 times faster again, anywhere in the
-app. Hold Shift to scroll the code a page at a time.
+
+| Wheel | What it does |
+|---|---|
+| Ctrl + wheel (Cmd + wheel on macOS) | Scroll 3 times faster: the code, the side bar and every list |
+| Shift + wheel | Scroll the code one page per wheel step |
 
 ### Commands without a key
 
