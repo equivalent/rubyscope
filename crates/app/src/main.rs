@@ -23,6 +23,7 @@ mod tree;
 #[cfg(test)]
 mod ui_tests;
 mod view;
+mod wheel;
 mod worker;
 
 /// `path/to/file.rb:12` → the file and the 0-based line.

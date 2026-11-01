@@ -259,9 +259,10 @@ These keys scroll the code when no text field has focus:
 | 0 | Scroll to the left edge |
 | ] / [, Alt+↓ / Alt+↑ | Diff mode: next / previous change |
 
-The mouse wheel scrolls the code 8 times faster than the egui default, and
-the side bar 2.5 times faster. Hold Shift to scroll the code a page at
-a time.
+The mouse wheel scrolls the code 12 times faster than the egui default,
+the side bar 3.75 times faster, and every other list 1.5 times faster.
+Hold Ctrl (Cmd on macOS) to scroll 3 times faster again, anywhere in the
+app. Hold Shift to scroll the code a page at a time.
 
 ### Commands without a key
 
