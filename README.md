@@ -159,12 +159,15 @@ rubyscope                                            # see below
    shows a list. When a class is opened in many files, it goes to the main
    file and tells you how many files there are. A click on the name where
    a class, module or constant is defined (`class Order`, `PREFIX = "x"`)
-   lists the places that use it.
+   lists the places that use it. A click on the name in `def total` goes
+   to the place that calls the method, or lists them when there are more.
 4. Go back with the mouse back button or the ← button in the top bar. Go
    forward with the mouse forward button or the → button.
 5. Right-click a name and choose "Find usages". The results panel opens at
-   the bottom. Click a row to go there. For a method, the "callers" button
-   on a row shows who calls the method around that row.
+   the bottom. Click a row to go there, or choose one with the up and down
+   arrows and press Enter. The app comes first, then specs and tests, then
+   gems. For a method, the "callers" button on a row shows who calls the
+   method around that row.
 6. Rest the pointer on a name for about half a second. A popup shows the
    signature, the docs, the definition location, the type that Rubyscope
    found and how sure it is.
@@ -186,7 +189,7 @@ rubyscope                                            # see below
 | Tabs | One tab for each open file. A middle-click on a tab closes it. |
 | Action bar | Only in a view file. A line above the code with a link to the controller action (or mailer method) of the view, for example `InvoicesController#edit`. Click it to go there. The line does not scroll with the code. |
 | Code view | Drag to select text. Double-click selects a word. Ctrl+C copies the selection. |
-| Results panel | Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers. Click a row or a name to go to it. |
+| Results panel | Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers. Click a row or a name to go to it. While the panel is new or was clicked last, the up and down arrows choose a row and Enter opens it; a click in the code gives the arrows back to the code. |
 
 ## Mouse
 
@@ -194,6 +197,7 @@ rubyscope                                            # see below
 |---|---|
 | Ctrl+click | Go to the definition (a list when there are several) |
 | Ctrl+click on the name in a class, module or constant definition (`class Order`, `PREFIX = "x"`) | List the usages of that class, module or constant in the results panel |
+| Ctrl+click on the name in a method definition (`def total`) | Go to the only usage, or list the usages in the results panel |
 | Ctrl+click on the name of a controller action | Go to its view (template or Phlex view) |
 | Click the link above the code of a view | Go to its controller action or mailer method |
 | Rest the pointer on a name | Popup with signature, docs, location, type |
@@ -236,6 +240,7 @@ Ctrl, as in Vim.
 | Esc | Close a popup, then the find bar, then the frame of the current change, then the results panel |
 | 1 to 9 | On the start screen: open that project |
 | Tab | In Ctrl+P, in diff mode: all files or only the changed files |
+| Up and down arrows, Enter | In Ctrl+P, Ctrl+T, Ctrl+K and the results panel: choose a row and open it |
 
 Ctrl+F and Ctrl+Shift+F start with the selected text, when it is on one
 line.

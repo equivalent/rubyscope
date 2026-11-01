@@ -207,8 +207,24 @@ impl Index {
                 })
             })
             .collect();
-        out.sort_by_key(|u| (u.confidence, !self.origin(u.file).is_project(), u.file, u.span.start));
+        // The app first, then specs and tests, then gems: most gem rows
+        // only share the name.
+        out.sort_by_key(|u| (self.usage_group(u.file), u.confidence, u.file, u.span.start));
         out
+    }
+
+    /// Where a usage sits, for the order of the list: 0 for the app, 1 for
+    /// a spec or a test, 2 for a gem or the standard library.
+    fn usage_group(&self, file: FileId) -> u8 {
+        if !self.origin(file).is_project() {
+            return 2;
+        }
+        let test = self.rel_path(file).is_some_and(|rel| {
+            rel.split('/').any(|part| part == "spec" || part == "test")
+                || rel.ends_with("_spec.rb")
+                || rel.ends_with("_test.rb")
+        });
+        if test { 1 } else { 0 }
     }
 
     /// The method that an offset is inside of, as a symbol.

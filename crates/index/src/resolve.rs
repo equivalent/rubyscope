@@ -8,6 +8,7 @@ use crate::infer::{Ctx, Ty};
 use crate::inflect;
 use crate::link::VIEW_OWNER;
 use crate::model::*;
+use crate::query::Symbol;
 use crate::rails;
 
 #[derive(Debug, Clone)]
@@ -87,6 +88,22 @@ impl Index {
         let views = if def.singleton { Vec::new() } else { self.action_views(&def.owner, &def.name) };
         let targets = if views.is_empty() { vec![self.method_target(m as MethodId, Confidence::Exact)] } else { views };
         Some(Resolution { span: def.loc.name_span, targets, receiver_type: None })
+    }
+
+    /// The method that a definition names at an offset: `pay!` in
+    /// `def pay!`, with the views of a controller action. `None` when the
+    /// offset is on a reference, as `:entity` in `belongs_to :entity` is.
+    pub fn method_declaration_at(&self, file: FileId, offset: u32) -> Option<(Symbol, Vec<Target>)> {
+        if self.route_links.get(&file).is_some_and(|l| l.iter().any(|l| l.span.contains(offset))) {
+            return None;
+        }
+        if self.ref_at(file, offset).is_some() {
+            return None;
+        }
+        let def = self.methods.iter().find(|m| m.loc.file == file && m.loc.name_span.contains(offset))?;
+        let views = if def.singleton { Vec::new() } else { self.action_views(&def.owner, &def.name) };
+        let sym = Symbol::Method { owner: def.owner.clone(), name: def.name.clone(), singleton: def.singleton };
+        Some((sym, views))
     }
 
     fn ctx(&self, file: FileId, r: &RawRef) -> Ctx {

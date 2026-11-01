@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Pos2, RichText};
 use rubyscope_index::model::Span;
-use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Target};
+use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Target, Usage};
 
 use crate::closing::{Closing, Step};
 use crate::diff::{Branch, FileMark, RepoStatus};
@@ -43,8 +43,17 @@ pub struct ResultRow {
 }
 
 pub enum Bottom {
-    Results { title: String, rows: Vec<ResultRow> },
-    Hierarchy { name: String, ancestors: Vec<String>, descendants: Vec<String> },
+    /// `selected` is the row that the arrows and Enter use.
+    Results {
+        title: String,
+        rows: Vec<ResultRow>,
+        selected: usize,
+    },
+    Hierarchy {
+        name: String,
+        ancestors: Vec<String>,
+        descendants: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +109,13 @@ pub struct App {
     pub show_blame: bool,
     pub bottom: Option<Bottom>,
     show_bottom: bool,
+    /// True while the results panel takes the up and down arrows and
+    /// Enter. A click outside the panel gives them back to the code.
+    pub results_keys: bool,
+    /// The results panel: its rect, and the scroll offset and height of
+    /// its list, from the last frame.
+    results_rect: Option<egui::Rect>,
+    results_view: (f32, f32),
     pub picker: Option<Picker>,
     file_items: Option<Arc<Vec<PickItem>>>,
     symbol_items: Option<Arc<Vec<PickItem>>>,
@@ -440,6 +456,9 @@ impl App {
             show_blame: false,
             bottom: None,
             show_bottom: true,
+            results_keys: false,
+            results_rect: None,
+            results_view: (0.0, 0.0),
             picker: None,
             file_items: None,
             symbol_items: None,
@@ -1201,14 +1220,34 @@ impl App {
     }
 
     /// A Ctrl+click. On the name in a class, module or constant definition
-    /// it lists the usages, as there is nowhere else to go. Elsewhere it
-    /// goes to the definition.
+    /// it lists the usages, as there is nowhere else to go. On the name in
+    /// a method definition it goes to the only usage, or lists them all;
+    /// a controller action goes to its views. Elsewhere it goes to the
+    /// definition.
     fn click_at_cursor(&mut self, pos: Pos2) {
         let (Some(index), Some(file)) = (self.index.clone(), self.current_file_id()) else { return };
         let Some(cursor) = self.current().and_then(|t| t.cursor) else { return };
-        match index.declaration_at(file, cursor) {
-            Some(sym) => self.show_usages(&index, &sym, "Usages of"),
-            None => self.definition_at_cursor(false, pos),
+        if let Some(sym) = index.declaration_at(file, cursor) {
+            self.show_usages(&index, &sym, "Usages of");
+            return;
+        }
+        let Some((sym, views)) = index.method_declaration_at(file, cursor) else {
+            self.definition_at_cursor(false, pos);
+            return;
+        };
+        if !views.is_empty() {
+            self.go_to_targets(sym.label(), views, pos);
+            return;
+        }
+        let usages = index.usages(&sym);
+        match usages.as_slice() {
+            [] => self.toast(format!("No usages of {} found", sym.label())),
+            [only] => {
+                let path = index.files[only.file as usize].path.clone();
+                self.open_path(&path, Some(only.span.start), None, true);
+                self.toast(format!("The only usage of {}", sym.label()));
+            }
+            _ => self.show_usage_rows(&index, sym.label(), usages, "Usages of"),
         }
     }
 
@@ -1297,6 +1336,10 @@ impl App {
     /// each row can show its own callers, one level up the call hierarchy.
     fn show_usages(&mut self, index: &Index, sym: &Symbol, what: &str) {
         let usages = index.usages(sym);
+        self.show_usage_rows(index, sym.label(), usages, what);
+    }
+
+    fn show_usage_rows(&mut self, index: &Index, label: String, usages: Vec<Usage>, what: &str) {
         let mut texts: HashMap<FileId, Option<String>> = HashMap::new();
         let rows = usages
             .iter()
@@ -1317,9 +1360,16 @@ impl App {
                 }
             })
             .collect::<Vec<_>>();
-        let title = format!("{what} {} ({})", sym.label(), rows.len());
-        self.bottom = Some(Bottom::Results { title, rows });
+        let title = format!("{what} {label} ({})", rows.len());
+        self.show_results(title, rows);
+    }
+
+    /// Opens the results panel with new rows. The arrows choose a row.
+    fn show_results(&mut self, title: String, rows: Vec<ResultRow>) {
+        self.bottom = Some(Bottom::Results { title, rows, selected: 0 });
         self.show_bottom = true;
+        self.results_keys = true;
+        self.results_view.0 = 0.0;
     }
 
     fn type_hierarchy(&mut self) {
@@ -1361,8 +1411,7 @@ impl App {
                     })
                     .collect();
                 let title = format!("Search \"{query}\" ({} hits)", rows.len());
-                self.bottom = Some(Bottom::Results { title, rows });
-                self.show_bottom = true;
+                self.show_results(title, rows);
             }
             Err(e) => self.toast(e),
         }
@@ -2426,63 +2475,113 @@ impl App {
         let mut go: Option<(PathBuf, u32, u32)> = None;
         let mut go_const: Option<String> = None;
         let mut callers_of: Option<Symbol> = None;
-        egui::Panel::bottom("results")
+        // The up and down arrows choose a row, and Enter opens it, while no
+        // popup or text field has the keys.
+        const ROW_H: f32 = 20.0;
+        let row_step = ROW_H + ui.spacing().item_spacing.y;
+        let keys_free = !(self.picker.is_some() || self.choose.is_some() || self.context_menu.is_some())
+            && !ui.ctx().memory(|m| m.focused().is_some());
+        let mut scroll_to: Option<f32> = None;
+        if self.results_keys
+            && keys_free
+            && let Some(Bottom::Results { rows, selected, .. }) = &mut self.bottom
+            && !rows.is_empty()
+        {
+            let (up, down, enter) = ui.input_mut(|i| {
+                (
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+                )
+            });
+            let before = *selected;
+            if down {
+                *selected = (*selected + 1).min(rows.len() - 1);
+            }
+            if up {
+                *selected = selected.saturating_sub(1);
+            }
+            *selected = (*selected).min(rows.len() - 1);
+            if *selected != before {
+                // Keep the row in view.
+                let (offset, height) = self.results_view;
+                let top = *selected as f32 * row_step;
+                if top < offset {
+                    scroll_to = Some(top);
+                } else if top + row_step > offset + height {
+                    scroll_to = Some(top + row_step - height);
+                }
+            }
+            if enter {
+                let row = &rows[*selected];
+                go = Some((row.path.clone(), row.offset, row.line));
+            }
+        }
+        let keys_on = self.results_keys;
+        let mut clicked_row: Option<usize> = None;
+        let mut view = self.results_view;
+        let panel = egui::Panel::bottom("results")
             .resizable(true)
             .default_size(220.0)
             .frame(egui::Frame::NONE.fill(theme.bg_dark).inner_margin(6.0))
             .show(ui, |ui| match &self.bottom {
-                Some(Bottom::Results { title, rows }) => {
+                Some(Bottom::Results { title, rows, selected }) => {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(title).color(theme.fg_bright).strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             close = ui.small_button("✕").clicked();
+                            if keys_on && !rows.is_empty() {
+                                ui.label(
+                                    RichText::new("↑ ↓: choose · Enter: open · Esc: close").color(theme.fg_dim).small(),
+                                );
+                            }
                         });
                     });
                     ui.separator();
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show_rows(
-                        ui,
-                        20.0,
-                        rows.len(),
-                        |ui, range| {
-                            for row in &rows[range] {
-                                let r = ui
-                                    .horizontal(|ui| {
-                                        let r = ui.add(
-                                            egui::Label::new(
-                                                RichText::new(format!("{}:{}", row.rel, row.line + 1))
-                                                    .color(theme.accent)
-                                                    .monospace(),
-                                            )
-                                            .sense(egui::Sense::click()),
-                                        );
-                                        if let Some(b) = row.badge {
-                                            ui.label(RichText::new(b).color(theme.yellow).small());
-                                        }
-                                        if let Some(c) = &row.caller
-                                            && ui
-                                                .small_button("callers")
-                                                .on_hover_text(format!("Who calls {}", c.label()))
-                                                .clicked()
-                                        {
-                                            callers_of = Some(c.clone());
-                                        }
-                                        if !row.context.is_empty() {
-                                            ui.label(RichText::new(&row.context).color(theme.fg_dim).small());
-                                        }
-                                        let t = ui.add(
-                                            egui::Label::new(RichText::new(&row.text).color(theme.fg).monospace())
-                                                .sense(egui::Sense::click())
-                                                .truncate(),
-                                        );
-                                        r.union(t)
-                                    })
-                                    .inner;
-                                if r.clicked() {
-                                    go = Some((row.path.clone(), row.offset, row.line));
-                                }
+                    let mut area = egui::ScrollArea::vertical().auto_shrink([false, false]);
+                    if let Some(y) = scroll_to {
+                        area = area.vertical_scroll_offset(y);
+                    }
+                    let out = area.show_rows(ui, ROW_H, rows.len(), |ui, range| {
+                        let first = range.start;
+                        for (n, row) in rows[range].iter().enumerate() {
+                            let chosen = keys_on && first + n == *selected;
+                            let r = ui
+                                .horizontal(|ui| {
+                                    let rel = RichText::new(format!("{}:{}", row.rel, row.line + 1))
+                                        .color(if chosen { theme.fg_bright } else { theme.accent })
+                                        .monospace();
+                                    let rel = if chosen { rel.background_color(theme.selection) } else { rel };
+                                    let r = ui.add(egui::Label::new(rel).sense(egui::Sense::click()));
+                                    if let Some(b) = row.badge {
+                                        ui.label(RichText::new(b).color(theme.yellow).small());
+                                    }
+                                    if let Some(c) = &row.caller
+                                        && ui
+                                            .small_button("callers")
+                                            .on_hover_text(format!("Who calls {}", c.label()))
+                                            .clicked()
+                                    {
+                                        callers_of = Some(c.clone());
+                                    }
+                                    if !row.context.is_empty() {
+                                        ui.label(RichText::new(&row.context).color(theme.fg_dim).small());
+                                    }
+                                    let t = ui.add(
+                                        egui::Label::new(RichText::new(&row.text).color(theme.fg).monospace())
+                                            .sense(egui::Sense::click())
+                                            .truncate(),
+                                    );
+                                    r.union(t)
+                                })
+                                .inner;
+                            if r.clicked() {
+                                go = Some((row.path.clone(), row.offset, row.line));
+                                clicked_row = Some(first + n);
                             }
-                        },
-                    );
+                        }
+                    });
+                    view = (out.state.clamped_offset().y, out.inner_rect.height());
                 }
                 Some(Bottom::Hierarchy { name, ancestors, descendants }) => {
                     ui.horizontal(|ui| {
@@ -2522,6 +2621,14 @@ impl App {
                 }
                 None => {}
             });
+        self.results_view = view;
+        self.results_rect = Some(panel.response.rect);
+        if let Some(n) = clicked_row
+            && let Some(Bottom::Results { selected, .. }) = &mut self.bottom
+        {
+            *selected = n;
+            self.results_keys = true;
+        }
         if close {
             self.show_bottom = false;
         }
@@ -2971,6 +3078,12 @@ impl App {
         self.frame_nr += 1;
         self.handle_messages();
         self.update_title(&ctx);
+        // A click outside the results panel gives the arrows back to the code.
+        if let Some(pos) = ctx.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+            && !(self.show_bottom && self.results_rect.is_some_and(|r| r.contains(pos)))
+        {
+            self.results_keys = false;
+        }
 
         // Keys. The picker and the find bar get Enter, arrows and typing.
         // While closing, keys do nothing.

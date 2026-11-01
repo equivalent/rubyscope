@@ -379,3 +379,22 @@ fn the_name_of_a_definition_lists_its_usages() {
     // A name inside a method body is not a definition.
     assert_eq!(p.declaration_usages("app/services/checkout.rb", "Order.new", 0), None);
 }
+
+#[test]
+fn the_name_of_a_method_definition_lists_its_usages_app_first() {
+    let p = Project::new(&[
+        ("spec/models/order_spec.rb", "RSpec.describe Order do\n  it { Order.new.total }\nend\n"),
+        ("app/models/order.rb", "class Order\n  def total = 1\nend\n"),
+        ("test/models/order_test.rb", "class OrderTest\n  def test_it = Order.new.total\nend\n"),
+        ("app/services/checkout.rb", "class Checkout\n  def run = Order.new.total\nend\n"),
+    ]);
+    let file = |path: &str| p.index.file_id(std::path::Path::new(path)).unwrap();
+    let order = file("app/models/order.rb");
+    let (sym, views) = p.index.method_declaration_at(order, 18).expect("the name of `def total`");
+    assert_eq!(sym.label(), "Order#total");
+    assert!(views.is_empty());
+    let rels: Vec<String> = p.index.usages(&sym).iter().map(|u| p.index.display_path(u.file)).collect();
+    assert_eq!(rels, ["app/services/checkout.rb", "spec/models/order_spec.rb", "test/models/order_test.rb"]);
+    // `new` in a method body is a reference, not a definition.
+    assert!(p.index.method_declaration_at(file("app/services/checkout.rb"), 34).is_none());
+}

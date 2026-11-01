@@ -181,7 +181,7 @@ fn ctrl_click_on_a_class_definition_lists_its_usages() {
     settle(&mut h);
     assert_eq!(current_rel(&h), "app/models/invoice.rb", "the click stays in the file");
     match &h.state().bottom {
-        Some(Bottom::Results { rows, title }) => {
+        Some(Bottom::Results { rows, title, .. }) => {
             assert_eq!(title, "Usages of Invoice (1)");
             assert_eq!(rows[0].rel, "app/services/billing.rb");
             assert_eq!(rows[0].line, 2);
@@ -219,7 +219,7 @@ fn find_usages_fills_the_results_panel() {
     h.state_mut().run_action(crate::keys::Action::FindUsages, &ctx);
     settle(&mut h);
     match &h.state().bottom {
-        Some(Bottom::Results { rows, title }) => {
+        Some(Bottom::Results { rows, title, .. }) => {
             assert_eq!(rows.len(), 1, "{title}");
             assert_eq!(rows[0].rel, "app/services/billing.rb");
         }
@@ -420,7 +420,7 @@ fn call_hierarchy_goes_up_one_level() {
     settle(&mut h);
     shot(&mut h, "13-callers");
     match &h.state().bottom {
-        Some(Bottom::Results { title, rows }) => {
+        Some(Bottom::Results { title, rows, .. }) => {
             assert!(title.starts_with("Callers of Billing#run"), "{title}");
             assert_eq!(rows[0].rel, "app/services/nightly.rb");
         }
@@ -1806,4 +1806,91 @@ fn the_start_screen_has_the_mode_button() {
     let _ = h.run_ok();
     assert!(!h.state().theme.dark);
     shot(&mut h, "57-start-screen-light");
+}
+
+#[test]
+fn arrows_choose_a_file_in_go_to_file() {
+    let root = fixture();
+    let mut h = harness(&root);
+    press(&mut h, CMD, Key::P);
+    type_text(&mut h, "models");
+    let labels = h.state_mut().picker.as_mut().unwrap().result_labels();
+    assert!(labels.len() >= 3, "{labels:?}");
+    press(&mut h, Modifiers::NONE, Key::ArrowDown);
+    press(&mut h, Modifiers::NONE, Key::ArrowDown);
+    press(&mut h, Modifiers::NONE, Key::ArrowUp);
+    assert_eq!(h.state().picker.as_ref().unwrap().selected, 1);
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), labels[1]);
+}
+
+#[test]
+fn ctrl_click_on_a_method_definition_with_one_usage_goes_there() {
+    let root = fixture();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    // `pay!` in `def pay!`, line 6. Its only usage is in billing.rb.
+    let p = point(&h, 6, 8);
+    ctrl_click(&mut h, p);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "app/services/billing.rb");
+    assert_eq!(cursor_line(&h), 4);
+}
+
+#[test]
+fn method_usages_list_the_app_first_and_the_arrows_choose_one() {
+    let root = fixture();
+    let call = "    invoice = Invoice.find(1)\n    invoice.pay!\n";
+    std::fs::create_dir_all(root.join("spec/models")).unwrap();
+    std::fs::write(
+        root.join("spec/models/invoice_spec.rb"),
+        format!("RSpec.describe Invoice do\n  it \"pays\" do\n{call}  end\nend\n"),
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("app/jobs")).unwrap();
+    std::fs::write(root.join("app/jobs/pay_job.rb"), format!("class PayJob\n  def perform\n{call}  end\nend\n"))
+        .unwrap();
+    let mut h = harness(&root);
+    open(&mut h, &root, "app/models/invoice.rb");
+    let p = point(&h, 6, 8);
+    ctrl_click(&mut h, p);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "app/models/invoice.rb", "a list, not a jump");
+    let rels = match &h.state().bottom {
+        Some(Bottom::Results { rows, title, selected }) => {
+            assert_eq!(title, "Usages of Invoice#pay! (3)");
+            assert_eq!(*selected, 0);
+            rows.iter().map(|r| r.rel.clone()).collect::<Vec<_>>()
+        }
+        _ => panic!("no results panel"),
+    };
+    assert_eq!(rels[2], "spec/models/invoice_spec.rb", "the spec comes last: {rels:?}");
+    assert!(h.state().results_keys);
+    shot(&mut h, "58-method-usages");
+    // Down twice and up once: the second row. Enter opens it, and the
+    // arrows still choose in the list, not scroll the code.
+    press(&mut h, Modifiers::NONE, Key::ArrowDown);
+    press(&mut h, Modifiers::NONE, Key::ArrowDown);
+    press(&mut h, Modifiers::NONE, Key::ArrowUp);
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), rels[1]);
+    assert_eq!(cursor_line(&h), 4);
+    press(&mut h, Modifiers::NONE, Key::ArrowDown);
+    press(&mut h, Modifiers::NONE, Key::Enter);
+    settle(&mut h);
+    assert_eq!(current_rel(&h), "spec/models/invoice_spec.rb");
+    // A click in the code gives the arrows back to the code.
+    let p = point(&h, 1, 2);
+    h.event(Event::PointerMoved(p));
+    h.event(Event::PointerButton { pos: p, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(Event::PointerButton {
+        pos: p,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    let _ = h.run_ok();
+    assert!(!h.state().results_keys);
 }
