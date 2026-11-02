@@ -768,6 +768,35 @@ fn tab_icon_turns_into_the_close_button_on_hover() {
     assert_eq!(current_rel(&h), "app/models/invoice.rb");
 }
 
+#[test]
+fn tab_scroll_bar_sits_under_the_tabs() {
+    let root = fixture();
+    for n in 0..30 {
+        std::fs::write(root.join(format!("app/models/long_model_name_{n}.rb")), "# x\n").unwrap();
+    }
+    let mut h = harness(&root);
+    for n in 0..30 {
+        open(&mut h, &root, &format!("app/models/long_model_name_{n}.rb"));
+    }
+    // Point at the tabs so the scroll bar shows.
+    let tab = |h: &Harness<'static, App>| {
+        h.get_all_by_label("long_model_name_29.rb")
+            .map(|n| n.rect())
+            .min_by(|a, b| a.min.y.total_cmp(&b.min.y))
+            .unwrap()
+    };
+    let name = tab(&h);
+    h.event(Event::PointerMoved(name.center()));
+    settle(&mut h);
+    shot(&mut h, "42-tab-scroll-bar");
+    let name = tab(&h);
+    let icon = h.get_by_label("Close long_model_name_29.rb").rect();
+    let code = h.state().current().unwrap().layout.unwrap().0;
+    // The bar has its own row: the code starts lower than the tab plus a bar.
+    assert!(code.y - name.max.y >= 6.0, "tab bottom {} code top {}", name.max.y, code.y);
+    assert!(icon.max.y <= name.max.y + 4.0);
+}
+
 /// Turns the mouse wheel `steps` steps over the code (down when negative).
 fn wheel(h: &mut Harness<'static, App>, steps: f32, modifiers: Modifiers) {
     let pos = Pos2::new(700.0, 400.0);

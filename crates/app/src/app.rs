@@ -2657,6 +2657,14 @@ impl App {
     fn tab_bar(&mut self, ui: &mut egui::Ui) {
         let theme = self.theme.clone();
         let mut close = None;
+        // A thin scroll bar that keeps its own row under the tabs, so it
+        // never covers the names.
+        ui.spacing_mut().scroll = egui::style::ScrollStyle {
+            bar_width: 4.0,
+            bar_inner_margin: 2.0,
+            bar_outer_margin: 0.0,
+            ..egui::style::ScrollStyle::solid()
+        };
         egui::ScrollArea::horizontal().id_salt("tabs").show(ui, |ui| {
             ui.horizontal(|ui| {
                 for (i, t) in self.tabs.iter().enumerate() {
@@ -3176,7 +3184,7 @@ impl App {
                 });
                 return;
             }
-            self.tab_bar(ui);
+            ui.scope(|ui| self.tab_bar(ui));
             if self.tabs.is_empty() {
                 // The tab bar closed the last tab.
                 return;
