@@ -741,13 +741,31 @@ fn close_tabs_from_the_tab_menu() {
 }
 
 #[test]
-fn tab_close_button_sits_next_to_the_name() {
+fn tab_icon_turns_into_the_close_button_on_hover() {
     let root = fixture();
+    std::fs::write(root.join("app/cart.js"), "export const total = 1\n").unwrap();
+    std::fs::write(root.join("NOTES"), "notes\n").unwrap();
     let mut h = harness(&root);
+    open(&mut h, &root, "app/cart.js");
+    open(&mut h, &root, "NOTES");
+    open(&mut h, &root, "app/models/entity.rb");
     open(&mut h, &root, "app/models/invoice.rb");
-    let name = h.get_all_by_label("invoice.rb").map(|n| n.rect()).max_by(|a, b| a.min.x.total_cmp(&b.min.x)).unwrap();
-    let close = h.get_by_label("✕").rect();
-    assert!(close.min.x - name.max.x <= 2.0, "gap {}", close.min.x - name.max.x);
+    // The icon sits just left of the name.
+    let name = h.get_all_by_label("entity.rb").map(|n| n.rect()).min_by(|a, b| a.min.y.total_cmp(&b.min.y)).unwrap();
+    let icon = h.get_by_label("Close entity.rb").rect();
+    assert!(icon.max.x <= name.min.x && name.min.x - icon.max.x <= 2.0, "icon {icon:?} name {name:?}");
+    shot(&mut h, "40-tab-icons");
+
+    // Hover the inactive tab, then click its icon: that tab closes and
+    // the active tab stays.
+    h.event(Event::PointerMoved(name.center()));
+    let _ = h.run_ok();
+    shot(&mut h, "41-tab-hover-close");
+    h.get_by_label("Close entity.rb").click();
+    let _ = h.run_ok();
+    let names: Vec<_> = h.state().tabs.iter().map(|t| t.rel.clone()).collect();
+    assert_eq!(names, ["app/cart.js", "NOTES", "app/models/invoice.rb"]);
+    assert_eq!(current_rel(&h), "app/models/invoice.rb");
 }
 
 /// Turns the mouse wheel `steps` steps over the code (down when negative).

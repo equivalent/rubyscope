@@ -10,6 +10,7 @@ mod app;
 mod closing;
 mod diff;
 mod external;
+mod file_icon;
 mod git;
 mod highlight;
 mod keys;

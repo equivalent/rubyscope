@@ -12,6 +12,7 @@ use rubyscope_index::{Confidence, FileId, Hover, Index, OutlineKind, Symbol, Tar
 use crate::closing::{Closing, Step};
 use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
+use crate::file_icon;
 use crate::git::Pull;
 use crate::keys::{self, Action, Keymap};
 use crate::memory::{self, Memory};
@@ -2662,10 +2663,22 @@ impl App {
                     let name = t.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                     let active = i == self.active;
                     let text = RichText::new(&name).color(if active { theme.fg_bright } else { theme.fg_dim });
-                    // The name and its ✕ sit close together, as one tab.
-                    ui.scope(|ui| {
+                    // The tab starts with its language icon. While the pointer
+                    // is over the tab, the icon turns into the close button.
+                    // The tab's background goes under the icon and the name, so
+                    // its shape is kept here and filled in once the tab is laid out.
+                    let bg_shape = ui.painter().add(egui::Shape::Noop);
+                    let tab = ui.scope(|ui| {
                         ui.spacing_mut().item_spacing.x = 1.0;
-                        let r = ui.selectable_label(active, text).on_hover_text(&t.rel);
+                        ui.add_space(3.0);
+                        let (icon_rect, icon) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::click());
+                        let close_label = format!("Close {name}");
+                        icon.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &close_label));
+                        if icon.clicked() {
+                            close = Some((i, TabClose::This));
+                        }
+                        let r = ui.add(egui::Label::new(text).selectable(false).sense(egui::Sense::click()));
+                        let r = r.on_hover_text(&t.rel);
                         if r.clicked() {
                             self.active = i;
                         }
@@ -2699,10 +2712,34 @@ impl App {
                             }
                             ui.add_space(3.0);
                         }
-                        if active && ui.small_button("✕").clicked() {
-                            close = Some((i, TabClose::This));
-                        }
+                        ui.add_space(5.0);
+                        (icon_rect, icon.hovered())
                     });
+                    let (icon_rect, on_icon) = tab.inner;
+                    let painter = ui.painter();
+                    let over = ui.rect_contains_pointer(tab.response.rect);
+                    let fill = if active {
+                        Some(theme.selection)
+                    } else if over {
+                        Some(theme.bg_light)
+                    } else {
+                        None
+                    };
+                    if let Some(fill) = fill {
+                        let rect = tab.response.rect.expand2(egui::vec2(0.0, 1.0));
+                        painter.set(bg_shape, egui::Shape::rect_filled(rect, 4.0, fill));
+                    }
+                    if over {
+                        if on_icon {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+                        let bg = on_icon.then_some(if active { theme.bg_light } else { theme.selection });
+                        let color = if on_icon { theme.fg_bright } else { theme.fg };
+                        file_icon::paint_close(painter, icon_rect.shrink(1.0), color, bg);
+                    } else {
+                        let lang = file_icon::Lang::of(&t.path);
+                        file_icon::paint(painter, icon_rect.shrink(2.5), lang, theme.fg_dim);
+                    }
                 }
             });
         });
