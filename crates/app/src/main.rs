@@ -1,6 +1,8 @@
 //! Rubyscope: a desktop app for reading Ruby code.
 //!
 //!     rubyscope [FOLDER] [FILE[:LINE]]
+//!     rubyscope 'rubyscope://open?file=/abs/path.rb&line=12'
+//!     rubyscope 'rubyscope://open?repo=NAME&path=app/models/order.rb&line=12'
 
 use std::path::PathBuf;
 
@@ -13,7 +15,9 @@ mod external;
 mod file_icon;
 mod git;
 mod highlight;
+mod instance;
 mod keys;
+mod link;
 mod memory;
 mod picker;
 mod projects;
@@ -42,13 +46,34 @@ fn parse_file_arg(arg: &str) -> (PathBuf, Option<u32>) {
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+/// A link that cannot be opened: says why, in the terminal and as a
+/// desktop notification (a link from a browser has no terminal), and ends.
+fn refuse_link(why: &str) -> ! {
+    eprintln!("rubyscope: {why}");
+    if cfg!(target_os = "linux") {
+        let _ = std::process::Command::new("notify-send")
+            .args(["Rubyscope link refused", why])
+            .stdin(std::process::Stdio::null())
+            .status();
+    }
+    std::process::exit(1);
+}
+
 fn main() -> eframe::Result {
     external::use_login_shell_path();
+    instance::enable();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut root: Option<PathBuf> = None;
     let mut open: Option<(PathBuf, Option<u32>)> = None;
     for a in &args {
-        let (p, line) = parse_file_arg(a);
+        let (p, line) = if link::is_link(a) {
+            let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+            link::parse_link(a, &home).unwrap_or_else(|why| refuse_link(&why))
+        } else if let Some(p) = link::file_uri(a) {
+            (p, None)
+        } else {
+            parse_file_arg(a)
+        };
         let p = p.canonicalize().unwrap_or(p);
         if p.is_dir() && root.is_none() {
             root = Some(p);
@@ -62,6 +87,12 @@ fn main() -> eframe::Result {
             }
             open = Some((p, line));
         }
+    }
+    // The project is open in another window: open the file there.
+    if let (Some(r), Some((file, line))) = (&root, &open)
+        && instance::send(r, &instance::Request { file: file.clone(), line: *line })
+    {
+        return Ok(());
     }
     if root.is_none() && args.is_empty() {
         let cwd = std::env::current_dir().ok();

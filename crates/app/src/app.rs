@@ -14,6 +14,7 @@ use crate::diff::{Branch, FileMark, RepoStatus};
 use crate::external;
 use crate::file_icon;
 use crate::git::Pull;
+use crate::instance;
 use crate::keys::{self, Action, Keymap};
 use crate::memory::{self, Memory};
 use crate::picker::{Payload, PickItem, Picked, Picker, PickerKind};
@@ -176,6 +177,11 @@ pub struct App {
     pub closing: Option<Closing>,
     /// The app has quit (tests: the process does not end there).
     pub quit: bool,
+    /// Files that a second start or a link sent to this window.
+    links: (std::sync::mpsc::Sender<instance::Request>, std::sync::mpsc::Receiver<instance::Request>),
+    /// The socket other starts send files of this project to.
+    instance: Option<instance::Server>,
+    ctx: egui::Context,
 }
 
 /// Lets the code view ask the index what is clickable in a file.
@@ -495,6 +501,9 @@ impl App {
             announce_diff: false,
             closing: None,
             quit: false,
+            links: std::sync::mpsc::channel(),
+            instance: None,
+            ctx: ctx.clone(),
         };
         if let Some(root) = root {
             app.open_project(root);
@@ -519,6 +528,8 @@ impl App {
         self.worker.build(&root, worker::From::Saved);
         self.worker.watch(&root);
         self.root = Some(root.clone());
+        self.instance = None;
+        self.instance = instance::Server::start(&root, self.ctx.clone(), self.links.0.clone());
         self.diff_base = load_diff_base(&root);
         if let Some(saved) = session_path(&root).and_then(|p| std::fs::read_to_string(p).ok())
             && let Ok(tabs) = serde_json::from_str::<Vec<(String, u32)>>(&saved)
@@ -537,6 +548,7 @@ impl App {
     pub fn close_project(&mut self) {
         self.save_session();
         self.worker.restart();
+        self.instance = None;
         self.root = None;
         self.index = None;
         self.index_status.clear();
@@ -675,6 +687,7 @@ impl App {
             eprintln!("rubyscope: closed in {:.2} s", c.started.elapsed().as_secs_f64());
         }
         self.quit = true;
+        self.instance = None;
         if cfg!(test) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         } else {
@@ -1590,6 +1603,11 @@ impl App {
     }
 
     fn handle_messages(&mut self) {
+        while let Ok(req) = self.links.1.try_recv() {
+            eprintln!("rubyscope: opened {}:{} from another start", req.file.display(), req.line.map_or(1, |l| l + 1));
+            self.open_path(&req.file, None, req.line, true);
+            instance::raise(&self.ctx);
+        }
         while let Ok(msg) = self.worker.rx.try_recv() {
             match msg {
                 Msg::Indexed { index, took } => {

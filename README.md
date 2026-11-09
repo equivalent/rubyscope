@@ -84,7 +84,8 @@ This builds the release binaries and installs:
 
 - `~/.local/bin/rubyscope` (the window)
 - `~/.local/bin/rubyscope-cli` (the test command)
-- `~/.local/share/applications/rubyscope.desktop` (the app launcher entry)
+- `~/.local/share/applications/rubyscope.desktop` (the app launcher entry,
+  set as the handler of `rubyscope://` links with `xdg-mime`)
 - `~/.local/share/icons/hicolor/*/apps/rubyscope.*` (the app icon, from
   `packaging/icon/`)
 
@@ -140,10 +141,37 @@ rubyscope                                            # see below
   or to open a recent project in this window or in a new window.
 - There is one window for each project. When a project is open, Ctrl+O
   opens the new folder in a new window.
+- When the project of a file is already open in a window,
+  `rubyscope <file>:<line>` (or a link, see below) opens the file in that
+  window and brings it to the front, instead of a second window.
 - Rubyscope remembers the open tabs of each project and opens them again
   at the next start.
 - The app launcher entry also lets a file manager open a folder or a `.rb`
   file with rubyscope.
+
+### Links
+
+A `rubyscope://` link opens a file at a line, from a browser, a chat or a
+report:
+
+```
+rubyscope://open?file=/abs/path/to/shop/app/models/order.rb&line=40
+rubyscope://open?repo=shop&path=app/models/order.rb&line=40
+```
+
+- `file=` is an absolute path.
+- `repo=` with `path=` finds the file in `~/git/<repo>` on the computer that
+  opens the link, so one link works on every computer.
+- `line=` is optional and 1-based.
+- The link is data from a web page, so Rubyscope checks it and runs nothing
+  from it. It refuses the link, with a desktop notification, when the line
+  is not a number, the file does not exist, or the `path=` leaves
+  `~/git/<repo>` (with `..` or a symbolic link).
+- On Linux, `bin/install` makes Rubyscope the handler of these links. Test
+  one with `xdg-open 'rubyscope://open?repo=shop&path=app/models/order.rb&line=40'`.
+  From a terminal, `rubyscope '<link>'` works on Linux and macOS.
+- macOS does not send these links to Rubyscope yet: the app does not
+  register the scheme.
 
 ## First steps
 
