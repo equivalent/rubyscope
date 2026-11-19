@@ -737,3 +737,7 @@ Main files in `crates/index/src`:
 | `inflect.rs` | ActiveSupport-style inflections |
 | `query.rs` | Usages, outline, breadcrumb, hover, type hierarchy, search |
 | `cache.rs` | The saved index |
+
+## License
+
+MIT. See [LICENSE](LICENSE).
