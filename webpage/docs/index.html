@@ -61,15 +61,25 @@
 
       <section id="install">
         <h2>Install</h2>
-        <p>You need Linux or macOS, Rust 1.88 or newer, and clang with libclang. The Prism parser is compiled from C when you build.</p>
-        <h3>Linux</h3>
+        <p>The easy way is a prebuilt file from the <a href="https://github.com/equivalent/rubyscope/releases/tag/v0.0.1">GitHub release</a>. Rubyscope is an alpha, so expect rough edges.</p>
+        <h3>Linux, from the release</h3>
+<pre><code>curl -LO https://github.com/equivalent/rubyscope/releases/download/v0.0.1/rubyscope-0.0.1-linux-x86_64.tar.gz
+tar xzf rubyscope-0.0.1-linux-x86_64.tar.gz
+rubyscope-0.0.1-linux-x86_64/install.sh</code></pre>
+        <p>This installs <code>rubyscope</code> and <code>rubyscope-cli</code> in <code>~/.local/bin</code>, an app launcher entry and the icon. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>. The file is for x86_64.</p>
+        <h3>macOS, from the release</h3>
+        <p>Download <a href="https://github.com/equivalent/rubyscope/releases/download/v0.0.1/Rubyscope-0.0.1-macos-arm64.dmg">Rubyscope-0.0.1-macos-arm64.dmg</a> (Apple silicon, macOS 11 or newer), open it and drag Rubyscope to Applications. The app is not signed yet, so macOS blocks the first start. Run this once:</p>
+<pre><code>xattr -dr com.apple.quarantine /Applications/Rubyscope.app
+mkdir -p ~/.local/bin
+ln -sf /Applications/Rubyscope.app/Contents/MacOS/rubyscope ~/.local/bin/rubyscope</code></pre>
+        <p>The link gives you the <code>rubyscope</code> command in the terminal. For <code>rubyscope-cli</code>, copy it from the DMG to <code>~/.local/bin</code>. An app started from the Dock gets only the system <code>PATH</code>, so Rubyscope reads the <code>PATH</code> of your login shell when it starts.</p>
+        <h3>From source</h3>
+        <p>You need Rust 1.88 or newer, and clang with libclang. The Prism parser is compiled from C when you build.</p>
 <pre><code>git clone https://github.com/equivalent/rubyscope
 cd rubyscope
-bin/install</code></pre>
-        <p>This builds the release binaries and installs <code>rubyscope</code> and <code>rubyscope-cli</code> in <code>~/.local/bin</code>, an app launcher entry and the icon. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>.</p>
-        <h3>macOS</h3>
-<pre><code>bin/install-macos</code></pre>
-        <p>This installs <code>~/Applications/rubyscope.app</code>, which you can open from Spotlight or the Dock, and a link to it in <code>~/.local/bin</code>. An app started from the Dock gets only the system <code>PATH</code>, so Rubyscope reads the <code>PATH</code> of your login shell when it starts.</p>
+bin/install          <span class="c"># Linux</span>
+bin/install-macos    <span class="c"># macOS</span></code></pre>
+        <p>On Linux it installs the same files as the release. On macOS it installs <code>~/Applications/rubyscope.app</code> and a link to it in <code>~/.local/bin</code>.</p>
         <h3>Optional tools</h3>
         <table>
           <thead><tr><th scope="col">Tool</th><th scope="col">What it gives</th></tr></thead>

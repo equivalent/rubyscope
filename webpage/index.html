@@ -289,26 +289,28 @@
       <div class="wrap">
         <div class="section-head">
           <h2>Install</h2>
-          <p>Rubyscope is built from source with Rust 1.88 or newer, clang and libclang.</p>
+          <p>Download the 0.0.1 alpha from the <a href="https://github.com/equivalent/rubyscope/releases/tag/v0.0.1">GitHub release</a>. Expect rough edges.</p>
         </div>
         <div class="install">
           <div>
             <h3>Linux</h3>
-<pre><code>git clone https://github.com/equivalent/rubyscope
-cd rubyscope
-bin/install
+<pre><code>curl -LO https://github.com/equivalent/rubyscope/releases/download/v0.0.1/rubyscope-0.0.1-linux-x86_64.tar.gz
+tar xzf rubyscope-0.0.1-linux-x86_64.tar.gz
+rubyscope-0.0.1-linux-x86_64/install.sh
 rubyscope ~/code/shop</code></pre>
-            <p>Installs the app in <code>~/.local/bin</code> with an app launcher entry. Built and used on Omarchy, on Wayland.</p>
+            <p>Installs <code>rubyscope</code> and <code>rubyscope-cli</code> in <code>~/.local/bin</code>, with an app launcher entry and the icon. Make sure <code>~/.local/bin</code> is on your <code>PATH</code>. For x86_64. Built and used on Omarchy, on Wayland.</p>
           </div>
           <div>
             <h3>macOS</h3>
-<pre><code>git clone https://github.com/equivalent/rubyscope
-cd rubyscope
-bin/install-macos
+            <p>Download <a href="https://github.com/equivalent/rubyscope/releases/download/v0.0.1/Rubyscope-0.0.1-macos-arm64.dmg">Rubyscope-0.0.1-macos-arm64.dmg</a>, open it and drag Rubyscope to Applications. The app is not signed yet, so run this once before the first start:</p>
+<pre><code>xattr -dr com.apple.quarantine /Applications/Rubyscope.app
+mkdir -p ~/.local/bin
+ln -sf /Applications/Rubyscope.app/Contents/MacOS/rubyscope ~/.local/bin/rubyscope
 rubyscope ~/code/shop</code></pre>
-            <p>Installs <code>rubyscope.app</code> in <code>~/Applications</code>. Runs on Apple silicon. Use Cmd where the docs say Ctrl.</p>
+            <p>For Apple silicon, macOS 11 or newer. Use Cmd where the docs say Ctrl.</p>
           </div>
         </div>
+        <p>Or build it from source with Rust 1.88 or newer, clang and libclang: clone <a href="https://github.com/equivalent/rubyscope">the repo</a> and run <code>bin/install</code> on Linux or <code>bin/install-macos</code> on macOS.</p>
         <p><a class="button" href="docs/">Read the docs</a></p>
       </div>
     </section>

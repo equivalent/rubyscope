@@ -67,5 +67,11 @@ which scans the whole history and not only the commits since the last tag.
 
 1. `gh release download v<version> -D <empty temp dir>` and compare the
    sha256 of both files with the ones in `dist/`.
-2. Report the release URL, the two file names, and say that the scan and
+2. The web page links to the files of one version: the install sections of
+   `webpage/index.html` and `webpage/docs/index.html`. Change the old version
+   there to the new one (every `v<old>` and `<old>` in the download URLs and
+   file names), commit and push main, then `cd webpage && kamal deploy`. Open
+   https://rubyscope.equivalent.work/#install and check that both download
+   links answer 200 (`curl -sIL <url>`).
+3. Report the release URL, the two file names, and say that the scan and
    `bin/ci` passed. Say that the app windows were not opened, unless they were.

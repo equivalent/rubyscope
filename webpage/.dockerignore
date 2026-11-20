@@ -1,4 +1,11 @@
-config/
-.kamal/
-bin/
-*.md
+# Only the files the site serves go into the image. Everything else is left
+# out: the deploy config, the scripts, the README and any new file by default.
+*
+!index.html
+!favicon.ico
+!nginx.conf
+!css/
+!docs/
+!fonts/
+!img/
+!js/

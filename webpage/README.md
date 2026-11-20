@@ -40,8 +40,9 @@ The server is `deploy.equivalent.work`, a DNS name for its IP address, so
 the address stays out of this repo. `rubyscope.equivalent.work` is a CNAME to
 that name. Both are DNS only in Cloudflare (no proxy), so kamal-proxy can get
 its Let's Encrypt certificate. The health check is `GET /up`. A deploy builds
-from the files in this folder, so it needs no commit. `bin/`, `config/` and
-the README are not shipped (see `.dockerignore`).
+from the files in this folder, so it needs no commit. Only the files the
+site serves go into the image: `.dockerignore` leaves out everything else,
+and a new file too until it is added there and in the `Dockerfile`.
 
 ## Screenshots
 
