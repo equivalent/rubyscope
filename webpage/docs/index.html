@@ -104,8 +104,16 @@ rubyscope                                         <span class="c"># the current 
           <li>With no arguments, Rubyscope opens the current folder when it has <code>.git</code> or a <code>Gemfile</code>. Otherwise it shows the start screen, with a path field, a "Browse…" button and your projects. Click a project or press its number (<kbd>1</kbd> to <kbd>9</kbd>) to open it, and drag a project to change its number. The "…" button of a project renames it in the list (the folder keeps its name) or removes it. A project shows its icon when it has one, such as <code>public/favicon.ico</code>. The sun and moon button at the top right switches between dark and light mode.</li>
           <li><kbd>Ctrl</kbd> <kbd>O</kbd> opens the system folder dialog. When a project is already open, the new one opens in a new window.</li>
           <li>Click the project name in the top bar to go back to the project list, or to open a recent project in this window or a new one.</li>
+          <li>There is one window for each project. When the project of a file is already open, <code>rubyscope &lt;file&gt;:&lt;line&gt;</code> opens the file in that window and brings it to the front.</li>
           <li>Rubyscope remembers the open tabs of each project and opens them again next time.</li>
+          <li>A file manager can open a folder or a <code>.rb</code> file with Rubyscope, through the app launcher entry.</li>
         </ul>
+        <h3 id="links">Links that open a file</h3>
+        <p>A <code>rubyscope://</code> link opens a file at a line, from a browser, a chat or a report:</p>
+<pre><code>rubyscope://open?repo=shop&amp;path=app/models/order.rb&amp;line=40
+rubyscope://open?file=/abs/path/to/shop/app/models/order.rb&amp;line=40</code></pre>
+        <p>With <code>repo=</code>, Rubyscope looks for the file in <code>~/git/&lt;repo&gt;</code>, so one link works on every computer. <code>line=</code> is optional. A link is data from a web page, so Rubyscope runs nothing from it. It refuses a link, with a desktop notification, when the line is not a number, the file does not exist, or the path leaves <code>~/git/&lt;repo&gt;</code>.</p>
+        <p>On Linux, the install makes Rubyscope the handler of these links. On macOS the app does not take links yet, so run <code>rubyscope '&lt;link&gt;'</code> in a terminal.</p>
         <figure class="shot narrow">
           <img src="../img/shots/start-screen.webp" width="1320" height="1000" loading="lazy"
                alt="The start screen with a path field, Open and Browse buttons, and three numbered project cards.">
@@ -140,10 +148,10 @@ rubyscope                                         <span class="c"># the current 
           <tbody>
             <tr><td>Top bar</td><td>From the left: the folder button (Go to file), back and forward, the project name (a menu to go back to the project list or open another project), the file path and the breadcrumb. The breadcrumb shows the class and method at the cursor; click a part to go there. On the right: the diff bar in diff mode, the index numbers and the RAM that Rubyscope uses, the "Diff" and "Blame" buttons (blue while on), the branch button, the pull button (a round arrow), "Commands" and the sun and moon button. Rest the pointer on a number or a button to see what it means.</td></tr>
             <tr><td>Side bar</td><td>"Files" is the file tree. "Outline" lists the classes, modules, methods and constants of the open file. In diff mode a third tab, "Changes", lists the changed files.</td></tr>
-            <tr><td>Tabs</td><td>One tab for each open file. Middle-click a tab to close it. Right-click it for more.</td></tr>
+            <tr><td>Tabs</td><td>One tab for each open file, with a small icon for its language. Over a tab, the icon turns into a close button. Middle-click a tab to close it. Right-click it for more.</td></tr>
             <tr><td>Action bar</td><td>Only in a view file: a link to its controller action or mailer method, for example <code>OrdersController#show</code>. It does not scroll with the code.</td></tr>
             <tr><td>Code</td><td>Drag to select text. Double-click selects a word. <kbd>Ctrl</kbd> <kbd>C</kbd> copies.</td></tr>
-            <tr><td>Results panel</td><td>Usages, search results and the type hierarchy. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers.</td></tr>
+            <tr><td>Results panel</td><td>Usages, search results and the type hierarchy. Usages list the app first, then specs and tests, then gems. The type hierarchy shows the ancestors in method lookup order, and the subclasses and includers. The up and down arrows choose a row and <kbd>Enter</kbd> opens it, until you click in the code.</td></tr>
           </tbody>
         </table>
         <figure class="shot">
@@ -165,6 +173,7 @@ rubyscope                                         <span class="c"># the current 
           <tbody>
             <tr><td><kbd>Ctrl</kbd> + click</td><td>Go to the definition, or a list when there are several.</td></tr>
             <tr><td class="wrap-ok"><kbd>Ctrl</kbd> + click a name where it is defined, such as <code>class Order</code> or <code>PREFIX = "x"</code></td><td>List the usages of that class, module or constant.</td></tr>
+            <tr><td class="wrap-ok"><kbd>Ctrl</kbd> + click the name in a method definition, such as <code>def total</code></td><td>Go to the only place that calls it, or list the usages.</td></tr>
             <tr><td><kbd>Ctrl</kbd> + click an action name</td><td>Go to its view, a template or a Phlex view.</td></tr>
             <tr><td>Click the bar above a view</td><td>Go to its controller action or mailer method.</td></tr>
             <tr><td>Rest the pointer on a name</td><td>A popup with the signature, docs, location and type.</td></tr>
@@ -213,6 +222,7 @@ rubyscope                                         <span class="c"># the current 
             <tr><td><kbd>Ctrl</kbd> <kbd>Q</kbd></td><td>Close the project and go back to the project list. Press it again to quit.</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Close a popup, then the find bar, then the frame of the current change, then the results panel</td></tr>
             <tr><td><kbd>1</kbd> to <kbd>9</kbd></td><td>On the start screen: open that project</td></tr>
+            <tr><td>↑ ↓, <kbd>Enter</kbd></td><td>In <kbd>Ctrl</kbd> <kbd>P</kbd>, <kbd>Ctrl</kbd> <kbd>T</kbd>, <kbd>Ctrl</kbd> <kbd>K</kbd> and the results panel: choose a row and open it</td></tr>
             <tr><td><kbd>Tab</kbd></td><td>In <kbd>Ctrl</kbd> <kbd>P</kbd>, in diff mode: switch between all files and the changed files</td></tr>
           </tbody>
         </table>
@@ -450,6 +460,7 @@ reindex = "f5"</code></pre>
             <tr><td class="wrap-ok">A click goes to an old line, or a new method is not found</td><td>Press <kbd>Ctrl</kbd> <kbd>K</kbd> and choose "Index the project again". If that does not help, close Rubyscope and delete <code>~/.cache/rubyscope/</code>.</td></tr>
             <tr><td class="wrap-ok">A click on a gem or a Rails method does nothing</td><td>Run <code>ruby -v</code> and <code>bundle install</code> in the project folder. Only gems installed for the project's Ruby are indexed.</td></tr>
             <tr><td class="wrap-ok">Blame does not show</td><td>The project must be a git repository, and <code>git</code> must be on <code>PATH</code>.</td></tr>
+            <tr><td class="wrap-ok">Diff mode marks nothing</td><td>The diff bar in the top bar says why: not a git repository, or the base branch is not found. Click it to pick a base branch.</td></tr>
             <tr><td class="wrap-ok">"This project has no GitHub remote"</td><td>The <code>origin</code> remote must be on github.com.</td></tr>
             <tr><td class="wrap-ok">A blame click opens the commit, not the pull request</td><td>Install the GitHub CLI, <code>gh</code>, and log in.</td></tr>
             <tr><td class="wrap-ok">You want to see what the index does</td><td>Start Rubyscope from a terminal. It prints a line such as <code>indexed 9000 files in 0.71 s</code>.</td></tr>
