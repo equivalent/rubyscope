@@ -58,12 +58,32 @@
 
     <section class="section" id="features">
       <div class="wrap">
-        <div class="section-head">
+        <div class="reel-head">
+          <div class="section-head">
           <h2>Go to definition that knows Rails</h2>
           <p>A text search finds every <code>ship!</code> in the project. Rubyscope finds the one you mean. It follows Ruby's lookup rules and the conventions of Rails, RSpec, FactoryBot and Stimulus.</p>
         </div>
-
-        <article class="feature">
+          <div class="reel-controls">
+            <span class="reel-count"><b class="reel-now">1</b> of 10</span>
+            <button type="button" class="reel-prev" aria-label="Previous feature">&larr;</button>
+            <button type="button" class="reel-next" aria-label="Next feature">&rarr;</button>
+          </div>
+        </div>
+        <ul class="reel-index" aria-label="All features">
+          <li><button type="button" aria-current="false">Methods and types</button></li>
+          <li><button type="button" aria-current="false">Action to view</button></li>
+          <li><button type="button" aria-current="false">Translations and routes</button></li>
+          <li><button type="button" aria-current="false">Find usages</button></li>
+          <li><button type="button" aria-current="false">Several matches</button></li>
+          <li><button type="button" aria-current="false">Git blame</button></li>
+          <li><button type="button" aria-current="false">Diff mode</button></li>
+          <li><button type="button" aria-current="false">Branches</button></li>
+          <li><button type="button" aria-current="false">Dark or light</button></li>
+          <li><button type="button" aria-current="false">Keys</button></li>
+        </ul>
+      </div>
+      <div class="reel" tabindex="0" role="region" aria-label="Features, scroll sideways">
+      <article class="card" id="feature-1" aria-label="Methods, and the type behind them">
           <div class="feature-text">
             <h3>Methods, and the type behind them</h3>
             <p>Rest the pointer on a name to see its signature, its docs and where it is defined. The popup also says how Rubyscope found the type: exact, inferred, a guess, or by name only.</p>
@@ -81,8 +101,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-2" aria-label="From a controller action to its view, and back">
           <div class="feature-text">
             <h3>From a controller action to its view, and back</h3>
             <p>Ctrl+click the name of an action to open its template or Phlex view. A view shows a link to its action above the code, so the way back is one click too.</p>
@@ -93,20 +112,19 @@
             </ul>
           </div>
           <div class="shots">
-            <figure class="shot jump">
+            <figure class="shot">
               <img src="img/shots/action-hover.webp" width="1402" height="716" loading="lazy"
                    alt="orders_controller.rb with Ctrl held over the show action.">
               <figcaption>Ctrl+click <code>def show</code> in the controller.</figcaption>
             </figure>
-            <figure class="shot jump">
+            <figure class="shot">
               <img src="img/shots/view-from-action.webp" width="1402" height="1036" loading="lazy"
                    alt="show.html.erb is open, with a bar above the code that links to OrdersController#show.">
               <figcaption>The view opens. The bar at the top goes back to <code>OrdersController#show</code>.</figcaption>
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-3" aria-label="Translation keys and route helpers">
           <div class="feature-text">
             <h3>Translation keys and route helpers</h3>
             <p>A click on <code>t(".updated")</code> opens the line in the locale file, in every locale. Lazy keys work in controllers, templates and Phlex views. A route helper such as <code>order_path</code> opens the line in the routes file.</p>
@@ -117,20 +135,19 @@
             </ul>
           </div>
           <div class="shots">
-            <figure class="shot jump">
+            <figure class="shot">
               <img src="img/shots/i18n-hover.webp" width="1402" height="1036" loading="lazy"
                    alt="The update action, with Ctrl held over the lazy translation key .updated.">
               <figcaption>A lazy key in <code>OrdersController#update</code>.</figcaption>
             </figure>
-            <figure class="shot jump narrow">
+            <figure class="shot narrow">
               <img src="img/shots/i18n.webp" width="982" height="636" loading="lazy"
                    alt="config/locales/en.yml is open at orders.update.updated.">
               <figcaption><code>en.orders.update.updated</code> in the locale file.</figcaption>
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-4" aria-label="Who uses this?">
           <div class="feature-text">
             <h3>Who uses this?</h3>
             <p>Ctrl+click a class name where it is defined, and the results panel lists every place that uses it. For a method, right-click and choose "Find usages". The "callers" button on a row goes one level up the call stack.</p>
@@ -143,8 +160,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-5" aria-label="When a name means several things">
           <div class="feature-text">
             <h3>When a name means several things</h3>
             <p>Some calls have no known receiver, such as a method on a block argument. Rubyscope then lists every definition with that name, and says how sure it is about each one. It never guesses in silence.</p>
@@ -157,8 +173,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-6" aria-label="Git blame next to the code">
           <div class="feature-text">
             <h3>Git blame next to the code</h3>
             <p>Press <kbd>Ctrl</kbd> <kbd>B</kbd>, or click Blame in the top bar. Each line shows the date and the author, and newer lines get a stronger blue. Click a block to open the commit, or its pull request, on GitHub.</p>
@@ -170,8 +185,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-7" aria-label="Read a branch like a pull request">
           <div class="feature-text">
             <h3>Read a branch like a pull request</h3>
             <p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd>, or click Diff. Lines your branch added are green, removed lines show as red rows between the real lines, and changes that are not committed yet are amber. The code is still the real file, so <kbd>Ctrl</kbd>+click and the hover keep working.</p>
@@ -189,8 +203,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-8" aria-label="Pull and switch branches from the top bar">
           <div class="feature-text">
             <h3>Pull and switch branches from the top bar</h3>
             <p>The round arrow runs <code>git pull</code> in the background. The button with the branch name lists the branches, the newest first, with the initials of the pull request author. Pick one to switch. Rubyscope reads the open files again and updates the index.</p>
@@ -208,8 +221,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-9" aria-label="Dark or light">
           <div class="feature-text">
             <h3>Dark or light</h3>
             <p>The sun and moon button at the right end of the top bar switches between dark and light, and Rubyscope keeps your choice. On Omarchy it uses the colors of your theme when the theme is of the same mode. Otherwise it uses Tokyo Night or Tokyo Night Day.</p>
@@ -222,8 +234,7 @@
             </figure>
           </div>
         </article>
-
-        <article class="feature">
+      <article class="card" id="feature-10" aria-label="Keys for everything">
           <div class="feature-text">
             <h3>Keys for everything</h3>
             <p><kbd>Ctrl</kbd> <kbd>P</kbd> finds a file. <kbd>Ctrl</kbd> <kbd>T</kbd> finds a class, method or constant in the project and its gems. <kbd>Ctrl</kbd> <kbd>K</kbd> lists every command. <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd> turns diff mode on, and <kbd>]</kbd> and <kbd>[</kbd> go from change to change. Hold <kbd>Ctrl</kbd> and turn the wheel to scroll 3 times faster. Scroll with <kbd>j</kbd> and <kbd>k</kbd>, and go to the top with <kbd>g</kbd><kbd>g</kbd>, as in Vim. Every key can be changed in one small file.</p>
@@ -244,7 +255,6 @@
         </article>
       </div>
     </section>
-
     <section class="section" id="understands">
       <div class="wrap">
         <div class="section-head">

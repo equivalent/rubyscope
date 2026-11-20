@@ -400,42 +400,6 @@ pre .c {
   line-height: 1.45;
 }
 
-/* A feature: the text on the left stays in view while its pictures scroll. */
-
-.feature {
-  display: grid;
-  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
-  gap: 2rem clamp(2rem, 5vw, 5rem);
-  padding-block: clamp(2.5rem, 5vw, 3.5rem);
-  border-top: 1px solid var(--rule);
-}
-
-.feature-text {
-  align-self: start;
-  position: sticky;
-  top: 6rem;
-}
-
-.feature h3 {
-  margin-bottom: 0.9rem;
-  font-size: var(--step-2);
-}
-
-.feature-text p {
-  color: var(--ink-2);
-}
-
-.feature-text ul {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--ink-2);
-  font-size: var(--step--1);
-}
-
-.feature-text li + li {
-  margin-top: 0.35rem;
-}
-
 .shots {
   display: grid;
   gap: 1.25rem;
@@ -467,19 +431,159 @@ pre .c {
   font-size: var(--step--1);
 }
 
-/* The jump from one picture to the next, for "from here to there" pairs. */
-.jump {
-  position: relative;
+/* Features: one row of cards that scrolls sideways. */
+
+/* The head row: title on the left, arrows and the count on the right. */
+.reel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+  margin-bottom: 1.75rem;
 }
 
-.jump + .jump::before {
-  content: "";
-  position: absolute;
-  left: 3rem;
-  top: -1.25rem;
-  width: 2px;
-  height: 1.25rem;
+.reel-head .section-head { margin-bottom: 0; }
+
+.reel-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
+
+.reel-controls button {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+}
+
+.reel-controls button:hover:not(:disabled) { border-color: var(--ink); }
+.reel-controls button:disabled { opacity: 0.35; cursor: default; }
+.reel-count b { color: var(--ink); font-weight: 650; }
+
+/* The names of all features. A click jumps to the card. */
+.reel-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.reel-index button {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 550;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background-color 120ms;
+}
+
+.reel-index button:hover { color: var(--ink); border-color: var(--ink-2); }
+
+.reel-index button[aria-current="true"] {
+  border-color: var(--ruby);
   background: var(--ruby);
+  color: #fff;
+}
+
+/* The row itself. It starts at the page's left edge of text and runs off the right
+   edge of the screen, so the next card always peeks in. */
+.reel {
+  --edge: max(var(--gutter), (100vw - var(--wrap)) / 2);
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--edge);
+  padding: 0.25rem var(--edge) 1.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+.reel:focus-visible { outline-offset: -3px; }
+
+/* Every card has the same height. Longer content scrolls up and down inside the card. */
+.card {
+  --card-h: clamp(26rem, 72vh, 40rem);
+  flex: 0 0 min(88vw, 64rem);
+  height: var(--card-h);
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-columns: minmax(0, 19rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem 2.5rem;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--paper-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+  /* A soft fade at the bottom says there is more below. */
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 4rem), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 4rem), transparent);
+}
+
+.card.at-end { -webkit-mask-image: none; mask-image: none; }
+
+/* On a wide screen the text stays in view while the pictures scroll. */
+.card .feature-text { position: sticky; top: 0; }
+.card h3 { margin-bottom: 0.9rem; font-size: var(--step-2); }
+.card .feature-text p { color: var(--ink-2); }
+
+.card .feature-text ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
+
+.card .feature-text li + li { margin-top: 0.35rem; }
+.card .shots { gap: 1.25rem; }
+.card .shot img { border-radius: 8px; }
+.card .shot.narrow { max-width: none; }
+
+@media (max-width: 960px) {
+  .card {
+    --card-h: min(74svh, 38rem);
+    flex-basis: min(86vw, 34rem);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .card .feature-text { position: static; }
+}
+
+@media (max-width: 640px) {
+  .reel-index {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(-1 * var(--gutter));
+    padding-inline: var(--gutter);
+    scrollbar-width: none;
+  }
+  .reel-index button { white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel { scroll-behavior: auto; }
 }
 
 /* What a click understands */
@@ -742,12 +846,10 @@ td.wrap-ok {
 
 @media (max-width: 960px) {
   .hero-text,
-  .feature,
   .docs {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .feature-text,
   .toc {
     position: static;
     max-height: none;
